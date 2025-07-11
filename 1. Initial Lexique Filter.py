@@ -36,11 +36,11 @@ def main():
     df = pd.read_csv(input_file_path, low_memory=False)
 
     # rename desired column headers
-    df.rename(columns={'1_ortho': "ortho",
+    df.rename(columns={'1_ortho': 'ortho',
                        '3_lemme': 'lemme',
                        '4_cgram': 'cgram',
-                       '5_genre': "genre",
-                       '6_nombre': "nombre",
+                       '5_genre': 'genre',
+                       '6_nombre': 'nombre',
                        '7_freqlemfilms2': 'freqlemfilms',
                        '8_freqlemlivres': 'freqlemlivres',
                        '14_islem': 'islem',
@@ -76,7 +76,7 @@ def main():
                           '35_nbmorph'])
 
     # filter rows: ortho or lemme column string length > 2 (same as >= 3)
-    df = df[df["ortho"].astype(str).str.len() > 2]
+    df = df[df['ortho'].astype(str).str.len() > 2]
     df = df[df['lemme'].astype(str).str.len() > 2]
 
     # misc removals of known bogus
@@ -88,6 +88,7 @@ def main():
     df = df[df['lemme'].astype(str) != 'team']
     df = df[df['lemme'].astype(str) != '58e']
     df = df[df['ortho'].astype(str) != 'brunches'] # loan word doesn't take fr plural
+    df = df[df['ortho'].astype(str) != 'gardes-chiourme']
 
     # filter out where ortho is NaN
     df = df[~df['ortho'].isna()]
