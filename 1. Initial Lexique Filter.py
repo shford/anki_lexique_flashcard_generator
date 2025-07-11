@@ -11,13 +11,14 @@
 @Purpose: Filter lexique lemmes.
 
 @Note: This is going to be slow-ish. On my machine it took ~1.8 minutes to run.
-        But it only needs to run once. And I'm attaching the output so you don't need to run it at all.
+        But it only needs to run once.
 """
+import gc
+import os
 import warnings
 
 import pandas as pd
-import os
-import gc
+
 
 # ==== Configuration ====
 user_path = os.path.expanduser('~')

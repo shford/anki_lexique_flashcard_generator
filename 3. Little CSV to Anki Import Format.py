@@ -1,23 +1,19 @@
 """
 
-Note 1: The formatting for adjectives and nouns is surprisingly inconvenient to decouple.
-        It would require a lot of duplicate code so in format_noun_declension_adj() we actually
-        may format_noun_declension_nom(). The adjective does not magically become a noun. I just
-        didn't want to abstract out the rows 2 & 3 special cases (thanks French) and corrective logic.
-        Likewise if you see a ['cgram'] == 'adj' inside the _nom() then now you know it's just there
-        for this. Sorry eh.
+Note 1: The formatting for adjectives and nouns is surprisingly inconvenient to fully decouple.
+        I tried but the row functions are still messy. They work pretty well though, mostly
+        through trial and error.
 
-Note 2: The Lexique 3.83 excel was already sorted such that nombre 's' came prior to 'p'.
-        I doubt that'll change but if this breaks for future versions then it be worth adding
-        a quick sort (not actually quicksort, jeez) to do that within the POS for each lemme.
-
+Note 2: The Lexique 3.83 excel is usually (not always) sorted such that singular 's' rows
+        come prior to plural 'p' rows even if the 's' and/or 'p' is missing. For that reason
+        depending on what's missing, this code gambles that the pattern will hold true.
 """
 import os
-from ast import literal_eval
-import deepl
 import re
+from ast import literal_eval
 from dataclasses import dataclass
 
+import deepl
 import numpy as np
 import pandas as pd
 
@@ -102,8 +98,7 @@ def main():
             pos = lemme_df['cgram'].iloc[0]
 
             # get DeepL English translation
-            # translation = translate(lemme, pos, deepl_client, source_language, target_language)
-            translation = ''
+            translation = translate(lemme, pos, deepl_client, source_language, target_language)
 
             # format 'Noun Declension' field
             noun_decls = format_noun_declension(lemme, lemme_df, pos)
