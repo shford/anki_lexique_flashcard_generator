@@ -1,20 +1,21 @@
 """
 Slice filtered .csv lexique into smaller files containing 500 lemmes apiece.
 """
-import pandas as pd
 import os
+
+import pandas as pd
 
 
 # === CONFIGURATION ===
 USER_PATH = os.path.expanduser('~')
-INPUT_FILE = f'{USER_PATH}/Documents/flashcard_project_new/Lexique383 - Filtered.csv'
-OUTPUT_FOLDER = f'{USER_PATH}/Documents/flashcard_project_new/lexique_exported_files'
+INPUT_CSV = f'{USER_PATH}/Documents/flashcard_project_new/Lexique383 - Filtered.csv'
+OUTPUT_DIR = f'{USER_PATH}/Documents/flashcard_project_new/lexique_exported_files'
 CHUNK_SIZE = 500
 SPOKEN_COUNT = 400
 WRITTEN_COUNT = 100
 
 # === STEP 1: LOAD CSV ===
-df_all = pd.read_csv(INPUT_FILE, encoding='utf-8')
+df_all = pd.read_csv(INPUT_CSV, encoding='utf-8')
 df_all.columns = [col.strip().lower() for col in df_all.columns]
 
 # Ensure 'lemme' is string
@@ -23,7 +24,7 @@ df_all['lemme'] = df_all['lemme'].astype(str)
 # Working dataset will be reduced as we process
 df_working = df_all.copy()
 
-os.makedirs(OUTPUT_FOLDER, exist_ok=True)
+os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 # chunk_num = 0
 start_idx = 1
@@ -72,7 +73,7 @@ while True:
 
     # save file
     filename = f'Freq {start_idx} - {end_idx}.csv'
-    filepath = os.path.join(OUTPUT_FOLDER, filename)
+    filepath = os.path.join(OUTPUT_DIR, filename)
     chunk_df.to_csv(filepath, index=False, encoding='utf-8')
     print(f"{filename}\tlen(set(chunk_df['lemme'])) = {total_lemmes} lemmes")
 

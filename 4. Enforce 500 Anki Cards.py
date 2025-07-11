@@ -40,7 +40,7 @@ def main():
     while NUM_FILES >= 1:
         if df1 is None:
             # init df1
-            filename1 = f'anki_deck_{START}-{START+CHUNK_SIZE-1}.csv'
+            filename1 = f'anki_deck_{START} - {START+CHUNK_SIZE-1}.csv'
             path1 = f'{DIR}/{filename1}'
             df1 = pd.read_csv(path1, encoding='utf-8')
         else:
@@ -54,7 +54,7 @@ def main():
         else:
             # init df2 regardless of first or last run
             START += CHUNK_SIZE
-            filename2 = f'anki_deck_{START}-{START+CHUNK_SIZE-1}.csv'
+            filename2 = f'anki_deck_{START} - {START+CHUNK_SIZE-1}.csv'
             path2 = f'{DIR}/{filename2}'
             df2 = pd.read_csv(path2, encoding='utf-8')
 
@@ -87,7 +87,7 @@ def main():
                     df1 = df1.merge(df2.iloc[:difference], how='left')
                     df2 = df2.drop(df2.index[:difference])
                 else:
-                    # todo this will be the last file  - need to end one early - write df1, remove df2 & overflow - no need to update difference b/c we've done all we can do
+                    # note: this will be the last file  - need to end one early - write df1, remove df2 & overflow - no need to update difference b/c we've done all we can do
                     df1 = df1.merge(df2.iloc[:len_df2], how='left')
                     df2 = df2.drop(df2.index[:len_df2])
 

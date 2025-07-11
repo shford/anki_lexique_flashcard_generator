@@ -4,11 +4,15 @@
 
 ## Installation
 
-Download and run the python files in order of file names.
-
-For the first file see the instructions in the header comment.
-
-For all the files you'll probably want to configure the Lexique input file and preferred output locations.
+1. Clone or download this repository.
+2. Download the Lexique.
+3. In LibreOffice, open Lexique383.xlsb and 'Save As' Lexique383.csv (comma field separated, UTF-8) in desired directory.
+4. For all the program files, you'll need to configure the input file and output locations.
+5. [Optional] Adjust IDE/interpreter memory.
+    a. I gave my IDE 2 GiB. You could probably get away with less. If you're having issues, in file 1. maybe try changing 'read_csv(..., low_memory=false)' to 'read_csv(..., low_memory=true).'
+6. Register for DeepL API (free version is fine) and copy your API (auth) key into project_credentials.txt.
+![](resources/DeepL_API.png)
+6. Run the python files in order of file names.
 
 ## Release History
 
