@@ -11,13 +11,14 @@
 @Purpose: Filter lexique lemmes.
 
 @Note: This is going to be slow-ish. On my machine it took ~1.8 minutes to run.
-        But it only needs to run once. And I'm attaching the output so you don't need to run it at all.
+        But it only needs to run once.
 """
+import gc
+import os
 import warnings
 
 import pandas as pd
-import os
-import gc
+
 
 # ==== Configuration ====
 user_path = os.path.expanduser('~')
@@ -36,11 +37,11 @@ def main():
     df = pd.read_csv(input_file_path, low_memory=False)
 
     # rename desired column headers
-    df.rename(columns={'1_ortho': "ortho",
+    df.rename(columns={'1_ortho': 'ortho',
                        '3_lemme': 'lemme',
                        '4_cgram': 'cgram',
-                       '5_genre': "genre",
-                       '6_nombre': "nombre",
+                       '5_genre': 'genre',
+                       '6_nombre': 'nombre',
                        '7_freqlemfilms2': 'freqlemfilms',
                        '8_freqlemlivres': 'freqlemlivres',
                        '14_islem': 'islem',
@@ -76,7 +77,7 @@ def main():
                           '35_nbmorph'])
 
     # filter rows: ortho or lemme column string length > 2 (same as >= 3)
-    df = df[df["ortho"].astype(str).str.len() > 2]
+    df = df[df['ortho'].astype(str).str.len() > 2]
     df = df[df['lemme'].astype(str).str.len() > 2]
 
     # misc removals of known bogus
@@ -88,6 +89,7 @@ def main():
     df = df[df['lemme'].astype(str) != 'team']
     df = df[df['lemme'].astype(str) != '58e']
     df = df[df['ortho'].astype(str) != 'brunches'] # loan word doesn't take fr plural
+    df = df[df['ortho'].astype(str) != 'gardes-chiourme']
 
     # filter out where ortho is NaN
     df = df[~df['ortho'].isna()]
