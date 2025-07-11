@@ -21,16 +21,10 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 
-# TODO
-#   - get rid or 'adj'/'nom' checks EXCEPT for homophone/homonym/x2 lemma's (should fix 7001-7500)
-#   - there's probably more irregular formats, but 1-10,000 look good
-#   - add column for the portion that we want to send to the API
-#   - add Tags for irregular cards that won't meet formatting
-
 
 # === Configuration variables ===
 USER_PATH = os.path.expanduser('~')
-INPUT_CSV = f'{USER_PATH}/Documents/flashcard_project_new/lexique_exported_files/Freq 10501 - 11500.csv'
+INPUT_CSV = f'{USER_PATH}/Documents/flashcard_project_new/lexique_exported_files/Freq 1 - 500.csv'
 OUTPUT_DIR = f'{USER_PATH}/Documents/flashcard_project_new/anki_lexique_imports'
 OUTPUT_PREFIX = 'anki_deck_'
 CHUNK_SIZE = 500
@@ -448,7 +442,7 @@ def row3_func(rows, rs, lemme, pos):
             ortho_m_p = rs.rows_m_p.iloc[0]['ortho']
             ortho_f_p = rs.rows_f_p.iloc[0]['ortho']
             return four_bold(lemme, pos, ortho_m_s, ortho_f_s, ortho_m_p, ortho_f_p)
-    elif pos == 'nom':
+    if pos == 'nom':
         #     genre       nombre
         # ( m | f | _ )     p
         # ( m | f | _ )     p
@@ -514,7 +508,7 @@ def row3_func(rows, rs, lemme, pos):
                         return sp_bold(lemme, pos, ortho_s, p_row2, genre)
             else:
                 pass
-    elif pos == 'adj':
+    if pos == 'adj':
         pass # no adj specific corrections to make for three rows
 
     # identify forms
@@ -960,7 +954,7 @@ def write_anki_csv(freq_start, chunk_idx, lemme_chunk, export_rows, formatting_e
     start_idx = freq_start + chunk_idx
     end_idx = start_idx + len(lemme_chunk) - 1
     out_file = os.path.join(
-        OUTPUT_DIR, f'{OUTPUT_PREFIX}{start_idx}-{end_idx}.csv'
+        OUTPUT_DIR, f'{OUTPUT_PREFIX}{start_idx} - {end_idx}.csv'
     )
 
     # create DataFrame for export - first row (makes it easier to import into Anki)
