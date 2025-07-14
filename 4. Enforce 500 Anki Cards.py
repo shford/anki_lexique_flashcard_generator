@@ -4,6 +4,10 @@
 This... shouldn't exist and is horrible programming. I ought to just correctly
  calculate the number of rows in the initial exports in file 2. or 3. or just combine
  all the files into one large program that reads efficiently in chunks.
+
+ todo
+    - this should probably prepend the df_overflow from the previous list to beginning
+        of the next list so that frequency order is preserved
 """
 import pandas as pd
 import os
@@ -18,7 +22,7 @@ CHUNK_SIZE = 500
 
 def main():
     START = 1
-    STOP = 1500
+    STOP = 1000
 
     check_indices(START, STOP)
 
@@ -31,7 +35,7 @@ def main():
     overflow_filename = f'df_overflow.csv'
     overflow_path = f'{DIR}/{overflow_filename}'
     if os.path.exists(overflow_path):
-        df_overflow = pd.read_csv(overflow_path, encoding='utf-8')
+        df_overflow = pd.read_csv(overflow_path, encoding='utf-8', header=None)
     else:
         df_overflow = pd.DataFrame()
 
@@ -42,7 +46,7 @@ def main():
             # init df1
             filename1 = f'anki_deck_{START} - {START+CHUNK_SIZE-1}.csv'
             path1 = f'{DIR}/{filename1}'
-            df1 = pd.read_csv(path1, encoding='utf-8')
+            df1 = pd.read_csv(path1, encoding='utf-8', header=None)
         else:
             filename1 = filename2
             path1 = path2
@@ -56,7 +60,7 @@ def main():
             START += CHUNK_SIZE
             filename2 = f'anki_deck_{START} - {START+CHUNK_SIZE-1}.csv'
             path2 = f'{DIR}/{filename2}'
-            df2 = pd.read_csv(path2, encoding='utf-8')
+            df2 = pd.read_csv(path2, encoding='utf-8', header=None)
 
         # balance
         difference = len(df1) - CHUNK_SIZE
@@ -97,11 +101,11 @@ def main():
             if df_overflow.empty:
                 os.remove(overflow_path)
             else:
-                df_overflow.to_csv(overflow_path, index=False, encoding='utf-8')
+                df_overflow.to_csv(overflow_path, index=False, encoding='utf-8', header=False)
                 print('  Saved overflow file for next run.')
 
             # write current file
-            df1.to_csv(path1, index=False, encoding='utf-8')
+            df1.to_csv(path1, index=False, encoding='utf-8', header=False)
             print(f'Wrote final .csv: {filename1}')
         elif NUM_FILES == 2 and df2.empty and df_overflow.empty:
             # delete empty overflow file
@@ -113,7 +117,7 @@ def main():
             print(f'  Deleted empty file {filename2}.')
 
             # write current file
-            df1.to_csv(path1, index=False, encoding='utf-8')
+            df1.to_csv(path1, index=False, encoding='utf-8', header=False)
             print(f'Wrote final .csv: {filename1}')
 
             # no need for final run
@@ -126,18 +130,18 @@ def main():
             print(f'  Deleted empty file {overflow_filename}.')
 
             # write df1
-            df1.to_csv(path1, index=False, encoding='utf-8')
+            df1.to_csv(path1, index=False, encoding='utf-8', header=False)
             print(f'Wrote: {filename1}')
 
             # write non-empty df2
-            df2.to_csv(path2, index=False, encoding='utf-8')
+            df2.to_csv(path2, index=False, encoding='utf-8', header=False)
             print(f'Wrote final .csv: {filename2}')
 
             # no need for final run
             break
         else:
             # write df1 to .csv file
-            df1.to_csv(path1, index=False, encoding='utf-8')
+            df1.to_csv(path1, index=False, encoding='utf-8', header=False)
             print(f'Wrote: {filename1}')
 
         # decrement loop
