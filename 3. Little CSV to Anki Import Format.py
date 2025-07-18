@@ -13,6 +13,7 @@ import re
 from ast import literal_eval
 from dataclasses import dataclass
 
+import boto3
 import deepl
 import numpy as np
 import pandas as pd
@@ -71,10 +72,16 @@ def main():
     formatting_exception_count = 0
 
     # prep for DeepL translations
-    auth_key = read_creds()
+    auth_key = read_deepl_creds()
     deepl_client = deepl.DeepLClient(auth_key)
-    source_language = 'FR'
-    target_language = 'EN-US'
+    deepl_source_language = 'FR'
+    deepl_target_language = 'EN-US'
+
+    # prep for AWS translations
+    aws_access_key_id, aws_secret_access_key = read_aws_creds()
+    # aws_client = boto3.client('translate', region_name='us-east-2', aws_access_key_id=aws_access_key_id, aws_secret_access_key=aws_secret_access_key)
+    aws_src_lang = 'en'
+    aws_tgt_lang = 'fr'
 
     # load pandas
     df = pd.read_csv(INPUT_CSV, encoding='utf-8')
@@ -98,7 +105,8 @@ def main():
             pos = lemme_df['cgram'].iloc[0]
 
             # get DeepL English translation
-            translation = translate(lemme, pos, deepl_client, source_language, target_language)
+            deepl_translation = deepl_translate(lemme, pos, deepl_client, deepl_source_language, deepl_target_language)
+            # aws_translation = aws_translate(aws_client, lemme, aws_src_lang, aws_tgt_lang)
 
             # format 'Noun Declension' field
             noun_decls = format_noun_declension(lemme, lemme_df, pos)
@@ -115,18 +123,53 @@ def main():
             pronunciation = get_pronunciation(lemme, lemme_df)
 
             # update rows
-            update_to_export_rows(lemme, pos, noun_decls, pronunciation, translation, export_rows)
+            update_to_export_rows(lemme, pos, noun_decls, pronunciation, deepl_translation, export_rows)
 
         # write sheet to be imported into Anki
         write_anki_csv(freq_start, chunk_idx, lemme_chunk, export_rows, formatting_exception_count)
 
+    aws_client.close()
 
-def read_creds():
+
+def read_aws_creds():
+    """
+    :return: AWS credentials
+    """
+    abs_path = os.path.abspath(os.getcwd())
+    credentials_file = 'resources/aws_credentials.txt'
+
+    # ensure file exists, make file template if it doesn't
+    if not os.path.exists(credentials_file):
+        with open(credentials_file, 'w+') as f:
+            cred_template = ("{\n"
+                             "\t'aws_access_key_id': 'PASTE_HERE__leave_quotes',\n"
+                             "\t'aws_secret_access_key': 'PASTE_HERE__leave_quotes'\n"
+                             "}"
+                             )
+            f.write(cred_template)
+        print(f'\nPlease fill in credentials file template created at: {abs_path}/{credentials_file}')
+        exit(-1)
+
+    # read credentials
+    with open(credentials_file, 'r') as f:
+        creds_raw = f.read()
+        cred_dict = None
+        try:
+            cred_dict = literal_eval(creds_raw)
+            aws_access_key_id = cred_dict['aws_access_key_id']
+            aws_secret_access_key = cred_dict['aws_secret_access_key']
+            return aws_access_key_id, aws_secret_access_key
+        except SyntaxError or ValueError as e:
+            print(f'\nCredential file at {abs_path}/{credentials_file} is malformed. Please check your credentials file.\nNote: if you delete your file and re-run this program it will remake the template. After, copy/paste your credentials where indicated.')
+            exit(-1)
+
+
+def read_deepl_creds():
     """
     :return: DeepL API key
     """
     abs_path = os.path.abspath(os.getcwd())
-    credentials_file = 'resources/project_credentials.txt'
+    credentials_file = 'resources/deepl_credentials.txt'
 
     # ensure file exists, make file template if it doesn't
     if not os.path.exists(credentials_file):
@@ -152,16 +195,42 @@ def read_creds():
             exit(-1)
 
 
-def translate(lemme, pos, deepl_client, source_lang, target_language) -> str:
+def deepl_translate(lemme, pos, deepl_client, source_lang, target_language) -> str:
     """
     :return: DeepL translation
     """
-    deepl_translation = deepl_client.translate_text(lemme, source_lang=source_lang, target_lang=target_language)
-    if pos == 'ver':
+    deepl_translation = deepl_client.translate_text(lemme, source_lang=source_lang, target_lang=target_language).text
+    if pos == 'ver' and 'to ' not in deepl_translation:
         # prepend 'to '
         deepl_translation = f'to {deepl_translation}'
 
     return deepl_translation.lower()
+
+
+def aws_translate(client, text, src_lang, tgt_lang):
+    """
+    :return: AWS translation
+    other translate calls of note:
+      list_text_translation_jobs list async batch https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/translate/client/list_text_translation_jobs.html
+      start_text_translation_job start async batch https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/translate/client/start_text_translation_job.html
+      stop_text_translation_job  stop async batch
+    """
+    response = client.translate_text(
+        Text=f'{text}',
+        TerminologyNames=[
+            '', # not wanted?
+        ],
+        SourceLanguageCode=f'{src_lang}',
+        TargetLanguageCode=f'{tgt_lang}',
+        Settings={
+            'Formality': '', # values 'FORMAL' or 'INFORMAL'
+            'Profanity': '', # values 'MASK' or ?
+            'Brevity': 'OFF' # values 'ON' or ?
+        }
+    )
+
+    return response.get('TranslatedText').lower() # from https://docs.aws.amazon.com/translate/latest/dg/get-started-sdk.html
+    return response['TranslatedText'].lower() # todo
 
 
 def group_rows_by_lemme(df) -> (list, dict):
