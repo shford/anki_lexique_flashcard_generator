@@ -43,17 +43,18 @@ def main():
     NUM_FILES = int((STOP-START+1)/CHUNK_SIZE)
     while NUM_FILES >= 1:
         if df1 is None:
-            # init df1
+            # init df1 from CSV
             filename1 = f'anki_deck_{START} - {START+CHUNK_SIZE-1}.csv'
             path1 = f'{DIR}/{filename1}'
             df1 = pd.read_csv(path1, encoding='utf-8', header=None)
         else:
+            # set current to next
             filename1 = filename2
             path1 = path2
             df1 = df2
 
         if NUM_FILES == 1:
-            # on the last file there is not file2, however to keep the balance logic working we'll make df2 an empty DataFrame
+            # on the last file there is no file2, however to keep the balance logic working we'll make df2 an empty DataFrame
             df2 = pd.DataFrame()
         else:
             # init df2 regardless of first or last run
@@ -62,40 +63,31 @@ def main():
             path2 = f'{DIR}/{filename2}'
             df2 = pd.read_csv(path2, encoding='utf-8', header=None)
 
-        # balance
+
+        # prepend from df_overflow prior to balancing regardless of length
+        if len(df_overflow) > 0:
+            df1 = pd.concat([df_overflow.iloc[:len(df_overflow)], df1], ignore_index=True)
+            df_overflow = df_overflow.drop(df_overflow.index[:len(df_overflow)]).reset_index(drop=True)
+
+        # region balance rows
         difference = len(df1) - CHUNK_SIZE
         if difference > 0:
-            # save leftover from df1 to df_overflow
+            # append leftover from df1 to df_overflow
             excesss_df1 = df1.iloc[CHUNK_SIZE:CHUNK_SIZE+difference]
             df_overflow = pd.concat([df_overflow, excesss_df1])
             df1 = df1.iloc[:-difference]
         elif difference == 0:
             pass # noop
         elif difference < 0:
-            # check if df_overflow has enough to take from
-            if len(df_overflow) >= abs(difference):
-                # move difference from df_overflow to df1 and then remove from df_overflow
-                df1 = df1.merge(df_overflow.iloc[:abs(difference)], how='left')
-                df_overflow = df_overflow.drop(df_overflow.index[:abs(difference)])
-            else:
-                # empty df_overflow and update remaining difference
-                if not df_overflow.empty:
-                    len_df_overflow = len(df_overflow)
-                    df1 = df1.merge(df_overflow.iloc[:len_df_overflow], how='left')
-                    df_overflow = df_overflow.drop(df_overflow.index[:len_df_overflow])
-                    difference += len_df_overflow
+            # append to df1 from df2
+            difference = abs(difference)
+            df1 = df1.merge(df2.iloc[:difference], how='left')
 
-                len_df2 = len(df2)
-                if abs(difference) < len_df2:
-                    # take the deficit from df2 - no need to update difference b/c it'll be 0
-                    df1 = df1.merge(df2.iloc[:difference], how='left')
-                    df2 = df2.drop(df2.index[:difference])
-                else:
-                    # note: this will be the last file  - need to end one early - write df1, remove df2 & overflow - no need to update difference b/c we've done all we can do
-                    df1 = df1.merge(df2.iloc[:len_df2], how='left')
-                    df2 = df2.drop(df2.index[:len_df2])
+            # remove from df2
+            df2 = df2.drop(df2.index[:difference])
+        # endregion
 
-        # save ODS documents
+        # region save ODS documents
         if NUM_FILES == 1:
             # delete overflow if unneeded
             if df_overflow.empty:
@@ -123,11 +115,13 @@ def main():
             # no need for final run
             break
         elif NUM_FILES == 2 and df2.empty:
-            raise Exception("Wha' in tarnation? NUM_FILES==2 and df2.empty but df_overflow is not empty.")
+            # raise Exception - balance logic must be broken
+            raise Exception(
+                "Wha' in tarnation? NUM_FILES==2 and df2.empty but df_overflow is not empty. Balance logic must be broken.")
         elif NUM_FILES == 2 and df_overflow.empty:
             # delete empty overflow file
             os.remove(overflow_path)
-            print(f'  Deleted empty file {overflow_filename}.')
+            print(f'Deleted empty file {overflow_filename}.')
 
             # write df1
             df1.to_csv(path1, index=False, encoding='utf-8', header=False)
@@ -143,6 +137,7 @@ def main():
             # write df1 to .csv file
             df1.to_csv(path1, index=False, encoding='utf-8', header=False)
             print(f'Wrote: {filename1}')
+        # endregion
 
         # decrement loop
         NUM_FILES -= 1
