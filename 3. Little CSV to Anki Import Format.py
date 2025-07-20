@@ -7,6 +7,10 @@ Note 1: The formatting for adjectives and nouns is surprisingly inconvenient to 
 Note 2: The Lexique 3.83 excel is usually (not always) sorted such that singular 's' rows
         come prior to plural 'p' rows even if the 's' and/or 'p' is missing. For that reason
         depending on what's missing, this code gambles that the pattern will hold true.
+
+        Todo:
+         - Replace <b>,<red>,<blue> w/ <span class="masc" | "fem" (ignore bold)
+         - Add column for easy filtering (i.e. 1_eng_fr, 500_fr_eng, ... 2500_eng_fr, etc...)
 """
 import os
 import re
@@ -25,11 +29,15 @@ INPUT_CSV = f'{USER_PATH}/Documents/flashcard_project_new/lexique_exported_files
 OUTPUT_DIR = f'{USER_PATH}/Documents/flashcard_project_new/anki_lexique_imports'
 OUTPUT_PREFIX = 'anki_deck_'
 CHUNK_SIZE = 500
-
 # === End Config ===
 
 # POS priority for sorting and filtering
 POS_PRIORITY = ['adj', 'adv', 'pre', 'ver', 'ono', 'nom', 'con']
+
+
+@dataclass
+class Card:
+    a = 1
 
 
 @dataclass
@@ -128,7 +136,7 @@ def main():
         # write sheet to be imported into Anki
         write_anki_csv(freq_start, chunk_idx, lemme_chunk, export_rows, formatting_exception_count)
 
-    aws_client.close()
+    # aws_client.close()
 
 
 def read_aws_creds():
