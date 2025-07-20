@@ -1,0 +1,7 @@
+All rnnoise models taken from https://github.com/GregorR/rnnoise-models.git.
+(Note: renamed models from random names to actual meanings from GregorR's lookup table.)
+
+Presumably trained by u/GregorR on the model forked by u/xiph.
+
+Usage (from repo linked above): "With the exception of the tools/ directory and this file, none of this work is creative and thus none of it is subject to copyright."
+
