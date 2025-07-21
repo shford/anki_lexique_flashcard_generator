@@ -10,26 +10,23 @@ Warning: This will overwrite the old files sound files. However, by default all 
 
 
 """
-import os
-import subprocess
-import shutil
 import datetime
-import time
 import io
-from base64 import encode
+import os
+import shutil
+import subprocess
+import time
+
+import librosa
 
 # neural nine imports
 import numpy as np
-import librosa
-import matplotlib.pyplot as plt
 import soundfile as sf
-import scipy.fftpack as fft
 from scipy.signal import medfilt
 
-
 # ==== Configuration ====
-BACKUP = False                      # todo toggle to True prior to pushing
-WRITE_INTERMEDIATE_FILES = False    # True is helpful for fine tuning what each function dones
+BACKUP = True                      # todo toggle to True prior to pushing
+WRITE_INTERMEDIATE_FILES = False   # True is helpful for fine tuning what each function dones
 # ========================
 
 # Formatting Constants - strongly recommend you do not change DESIRED_
@@ -87,7 +84,8 @@ def audio_chain(pcm_bytes, filename):
 
     # 2. remove non-speech (coughing, sniffling, shuffling, humming, etc) - note: model works best early in process
     sr_model_path = 'resources/rnnoise_models/speech_recording.rnnn'
-    pcm_bytes = ffmpeg_arnndn(pcm_bytes, filename, sr_model_path)
+    secondary_prefix = '_sr_'
+    pcm_bytes = ffmpeg_arnndn(pcm_bytes, filename, sr_model_path, secondary_prefix)
 
     # 3. high/low pass filter helps with extreme noises
     pcm_bytes = ffmpeg_lowpass_highpass(pcm_bytes, filename)
@@ -165,59 +163,52 @@ def ffmpeg_silenceremove(pcm_bytes, filename):
 def denoise_examples():
     filename = 'hypertts-6840f600086fd031f601da7d58c4e6ab98b511d2c9242193b5ecc55b.mp3' # sample is: 'aimer'
     filepath = f'{ANKI_DIR}/{filename}'
+    pcm_bytes = _read_mp3_to_pcm_bytes(filepath)
 
-    # region short time fourier transform filtering from youtuber 'Neural Nine'
-    n9_wbq_out = f'{ANKI_DIR}/{NEURAL_NINE_PREFIX}_{filename}'
-    neural_nine_demo(filepath, n9_wbq_out)
-    # endregion
+    # short time fourier transform filtering from youtuber 'Neural Nine'
+    pcm_bytes = neural_nine_demo(pcm_bytes, filename)
 
     # region neural network rnnoise models
     model_path = 'resources/rnnoise_models'
-    gg_arnndn_wbq_out = f'{ANKI_DIR}/{ARNNDN_PREFIX}_gg_{filename}'
+
+    gg_secondary_prefix = '_gg_'
     gg_model = f'{model_path}/general_general.rnnn'
-    gr_arnndn_wbq_out = f'{ANKI_DIR}/{ARNNDN_PREFIX}_gr_{filename}'
+    pcm_bytes = ffmpeg_arnndn(pcm_bytes, filename, gg_model, gg_secondary_prefix)
+
+    gr_secondary_prefix = '_gr_'
     gr_model = f'{model_path}/general_recording.rnnn'
-    vg_arnndn_wbq_out = f'{ANKI_DIR}/{ARNNDN_PREFIX}_vg_{filename}'
+    pcm_bytes = ffmpeg_arnndn(pcm_bytes, filename, gr_model, gr_secondary_prefix)
+
+    vg_secondary_prefix = '_vg_'
     vg_model = f'{model_path}/voice_general.rnnn'
-    vr_arnndn_wbq_out = f'{ANKI_DIR}/{ARNNDN_PREFIX}_vr_{filename}'
+    pcm_bytes = ffmpeg_arnndn(pcm_bytes, filename, vg_model, vg_secondary_prefix)
+
+    vr_secondary_prefix = '_vr_'
     vr_model = f'{model_path}/voice_recording.rnnn'
-    sr_arnndn_wbq_out = f'{ANKI_DIR}/{ARNNDN_PREFIX}_sr_{filename}'
+    pcm_bytes = ffmpeg_arnndn(pcm_bytes, filename, vr_model, vr_secondary_prefix)
+
+    sr_secondary_prefix = '_sr_'
     sr_model = f'{model_path}/speech_recording.rnnn'
-
-    ffmpeg_arnndn(filepath, gg_arnndn_wbq_out, gg_model)
-    ffmpeg_arnndn(filepath, gr_arnndn_wbq_out, gr_model)
-    ffmpeg_arnndn(filepath, vg_arnndn_wbq_out, vg_model)
-    ffmpeg_arnndn(filepath, vr_arnndn_wbq_out, vr_model)
-    ffmpeg_arnndn(filepath, sr_arnndn_wbq_out, sr_model)
+    pcm_bytes = ffmpeg_arnndn(pcm_bytes, filename, sr_model, sr_secondary_prefix)
     # endregion
 
-    # region S.O. two afftdn passes followed by highpass & lowpass filter
-    lowpass_highpass_out = f'{ANKI_DIR}/{LHPASS_PREFIX}_{filename}'
-    afftdn_out1 = f'{ANKI_DIR}/{AFFTDN_PREFIX}_pass1_{filename}'
-    afftdn_out2 = f'{ANKI_DIR}/{AFFTDN_PREFIX}_pass2_{filename}'
-    ffmpeg_lowpass_highpass(filepath, lowpass_highpass_out)
-    ffmpeg_afftdn(lowpass_highpass_out, afftdn_out1)
-    ffmpeg_afftdn(afftdn_out1, afftdn_out2)
-    # endregion
+    # high/low pass (o.k. bandpass) filter helps with extreme noises
+    pcm_bytes = ffmpeg_lowpass_highpass(pcm_bytes, filename)
+
+    # afftdn for general clarity
+    pcm_bytes = ffmpeg_afftdn(pcm_bytes, filename)
 
     # adeclick - impulsive filtering
-    adeclick_out = f'{ANKI_DIR}/{ADECLICK_PREFIX}_{filename}'
-    ffmpeg_adeclick(filepath, adeclick_out)
+    ffmpeg_adeclick(filepath, filename)
 
-    # afwtdn - broadband filtering
-    # I found this one to be uniquely bad. Maybe I just didn't tweak it enough.
-    afwtdn_out = f'{ANKI_DIR}/{AFWTDN_PREFIX}_{filename}'
-    ffmpeg_afwtdn(filepath, afwtdn_out)
+    # afwtdn - broadband filtering - I found this one to be uniquely bad. Maybe I just didn't tweak it enough.
+    ffmpeg_afwtdn(pcm_bytes, filepath)
 
     # anldmn - broadband filtering (ref UCLA math article/heat equation)
-    anlmdn_out = f'{ANKI_DIR}/{ANLMDN_PREFIX}_{filename}'
-    ffmpeg_anlmdn(filepath, anlmdn_out)
+    ffmpeg_anlmdn(pcm_bytes, filename)
 
     # adynamicequalizer - attenuate unwanted freqs
-    adynamicequalizer_out = f'{ANKI_DIR}/{ADYNAMICEQ_PREFIX}_{filename}'
-    ffmpeg_adynamicequalizer(filepath, adynamicequalizer_out)
-
-    return
+    ffmpeg_adynamicequalizer(pcm_bytes, filename)
 
 
 def neural_nine_demo(pcm_bytes, filename):
@@ -267,7 +258,7 @@ def neural_nine_demo(pcm_bytes, filename):
     return result.stdout # pcm bytes in exactly our required format
 
 
-def ffmpeg_arnndn(pcm_bytes, filename, rel_model_path, mix=1):
+def ffmpeg_arnndn(pcm_bytes, filename, rel_model_path, secondary_prefix, mix=1):
     """
     arnndn params:
         pcm_bytes   : rnnoise model operates only on RAW 16-bit (machine endian) mono - e.g. pcm_bytes
@@ -290,7 +281,7 @@ def ffmpeg_arnndn(pcm_bytes, filename, rel_model_path, mix=1):
     '-f', DESIRED_FORMAT,       # unchanging output format
     'pipe:1'                    # unchaning stdout
     ]
-    return run_command(command, pcm_bytes, filename, f'{ARNNDN_PREFIX}_sr_')
+    return run_command(command, pcm_bytes, filename, f'{ARNNDN_PREFIX}{secondary_prefix}')
 
 
 def _read_mp3_to_pcm_bytes(input_path) -> bytes:
@@ -335,14 +326,14 @@ def ffmpeg_afftdn(pcm_bytes, filename):
     ffmpeg -i <path_in> -af "afftdn=nf=-25" <path_out>
     """
     command = [
-    'ffmpeg',
-    '-f', DESIRED_FORMAT,       # unchanging input format
-    '-ar', DESIRED_RATE,        # unchanging input rate
-    '-ac', DESIRED_CHANNELS,    # unchanging input channels
-    '-i', 'pipe:0',             # unchanging stdin
-    '-filter:a', 'afftdn=nf=-25',
-    '-f', DESIRED_FORMAT,       # unchanging output format
-    'pipe:1'                    # unchaning stdout
+        'ffmpeg',
+        '-f', DESIRED_FORMAT,       # unchanging input format
+        '-ar', DESIRED_RATE,        # unchanging input rate
+        '-ac', DESIRED_CHANNELS,    # unchanging input channels
+        '-i', 'pipe:0',             # unchanging stdin
+        '-filter:a', 'afftdn=nf=-25',
+        '-f', DESIRED_FORMAT,       # unchanging output format
+        'pipe:1'                    # unchaning stdout
     ]
     return run_command(command, pcm_bytes, filename, AFFTDN_PREFIX)
 
@@ -355,19 +346,19 @@ def ffmpeg_lowpass_highpass(pcm_bytes, filename):
     ffmpeg -i <path_in> -af "lowpass=f=3000, highpass=f=200" <path_out>
     """
     command = [
-    'ffmpeg',
-    '-f', DESIRED_FORMAT,       # unchanging input format
-    '-ar', DESIRED_RATE,        # unchanging input rate
-    '-ac', DESIRED_CHANNELS,    # unchanging input channels
-    '-i', 'pipe:0',             # unchanging stdin
-    '-filter:a', f'highpass=f=100, lowpass=f=3000',
-    '-f', DESIRED_FORMAT,       # unchanging output format
-    'pipe:1'                    # unchaning stdout
+        'ffmpeg',
+        '-f', DESIRED_FORMAT,       # unchanging input format
+        '-ar', DESIRED_RATE,        # unchanging input rate
+        '-ac', DESIRED_CHANNELS,    # unchanging input channels
+        '-i', 'pipe:0',             # unchanging stdin
+        '-filter:a', f'highpass=f=100, lowpass=f=3000',
+        '-f', DESIRED_FORMAT,       # unchanging output format
+        'pipe:1'                    # unchaning stdout
     ]
     return run_command(command, pcm_bytes, filename, LHPASS_PREFIX)
 
 
-def ffmpeg_adeclick(path_in, path_out):
+def ffmpeg_adeclick(pcm_bytes, filename):
     """
     reference command:
     ffmpeg -y -i <path_in> -af 'adeclick=w=60:o=85:a=10:t=3:b=5:m=s'
@@ -384,27 +375,19 @@ def ffmpeg_adeclick(path_in, path_out):
     """
     command = [
         'ffmpeg',
-        '-y',
-        '-i', path_in,
+        '-f', DESIRED_FORMAT,       # unchanging input format
+        '-ar', DESIRED_RATE,        # unchanging input rate
+        '-ac', DESIRED_CHANNELS,    # unchanging input channels
+        '-i', 'pipe:0',             # unchanging stdin
         '-filter:a', 'adeclick=w=10:o=95:a=0:t=1:b=0:m=s',
-        '-acodec', 'libmp3lame',
-        '-ar', '48000',
-        '-ac', '1',
-        path_out
+        '-f', DESIRED_FORMAT,       # unchanging output format
+        'pipe:1'                    # unchaning stdout
     ]
-
-    try:
-        result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
-    except subprocess.CalledProcessError as e:
-        print("FFmpeg stderr:\n")
-        print(e.stderr.decode('utf-8'))
-        raise
+    return run_command(command, pcm_bytes, filename, ADECLICK_PREFIX)
 
 
-def ffmpeg_afwtdn(path_in, path_out):
+def ffmpeg_afwtdn(pcm_bytes, filename):
     """
-    I hate this one. Maybe tweaking would help? Maybe not.
-
     todo
         - More of a weird note really, the default and mild commands both SIGSEGV's. The issue must
           presumably be in the underlying ffmpeg C/C++ files. I tried several variations of the arguments.
@@ -419,50 +402,53 @@ def ffmpeg_afwtdn(path_in, path_out):
     # region command declarations
     command_with_defaults = [
         'ffmpeg',
-        '-y',
-        '-i', path_in,
+        '-f', DESIRED_FORMAT,       # unchanging input format
+        '-ar', DESIRED_RATE,        # unchanging input rate
+        '-ac', DESIRED_CHANNELS,    # unchanging input channels
+        '-i', 'pipe:0',             # unchanging stdin
         '-filter:a', 'afwtdn=sigma=0:levels=10:wavet=sym2:percent=85:adaptive=0:samples=8192:softness=1',
         # '-filter:a', 'afwtdn=sigma=0:levels=10:wavet=sym2:percent=85:profile=0:adaptive=0:samples=8192:softness=1',
-        '-acodec', 'libmp3lame',
-        '-ar', '48000',
-        '-ac', '1',
-        path_out
+        '-f', DESIRED_FORMAT,       # unchanging output format
+        'pipe:1'                    # unchaning stdout
     ]
 
     chatgpt_suggested_mild = [
         'ffmpeg',
-        '-y',
-        '-i', path_in,
+        '-f', DESIRED_FORMAT,       # unchanging input format
+        '-ar', DESIRED_RATE,        # unchanging input rate
+        '-ac', DESIRED_CHANNELS,    # unchanging input channels
+        '-i', 'pipe:0',             # unchanging stdin
         '-filter:a', 'afwtdn=sigma=0.005:levels=6:wavet=sym4:percent=75:adaptive=0:samples=8192:softness=1',
         # '-filter:a', 'afwtdn=sigma=0.005:levels=6:wavet=sym4:percent=75:profile=0:adaptive=0:samples=8192:softness=1',
-        '-acodec', 'libmp3lame',
-        '-ar', '48000',
-        '-ac', '1',
-        path_out
+
+        '-f', DESIRED_FORMAT,       # unchanging output format
+        'pipe:1'                    # unchaning stdout
     ]
 
     chatgpt_suggested_balanced = [
         'ffmpeg',
-        '-y',
-        '-i', path_in,
+        '-f', DESIRED_FORMAT,       # unchanging input format
+        '-ar', DESIRED_RATE,        # unchanging input rate
+        '-ac', DESIRED_CHANNELS,    # unchanging input channels
+        '-i', 'pipe:0',             # unchanging stdin
         # '-filter:a', 'afwtdn=sigma=0.01:levels=8:wavet=coif5:percent=95:adaptive=1:samples=16384:softness=3',
         '-filter:a', 'afwtdn=sigma=0.01:levels=8:wavet=coif5:percent=95:profile=1:adaptive=0:samples=16384:softness=3',
-        '-acodec', 'libmp3lame',
-        '-ar', '48000',
-        '-ac', '1',
-        path_out
+
+        '-f', DESIRED_FORMAT,       # unchanging output format
+        'pipe:1'                    # unchaning stdout
     ]
 
     chatgpt_suggested_aggressive = [
         'ffmpeg',
-        '-y',
-        '-i', path_in,
+        '-f', DESIRED_FORMAT,       # unchanging input format
+        '-ar', DESIRED_RATE,        # unchanging input rate
+        '-ac', DESIRED_CHANNELS,    # unchanging input channels
+        '-i', 'pipe:0',             # unchanging stdin
         '-filter:a', 'afwtdn=sigma=0.02:levels=10:wavet=bl3:percent=100:adaptive=1:samples=32768:softness=5',
         # '-filter:a', 'afwtdn=sigma=0.02:levels=10:wavet=bl3:percent=100:profile=1:adaptive=1:samples=32768:softness=5',
-        '-acodec', 'libmp3lame',
-        '-ar', '48000',
-        '-ac', '1',
-        path_out
+
+        '-f', DESIRED_FORMAT,       # unchanging output format
+        'pipe:1'                    # unchaning stdout
     ]
     # endregion
 
@@ -470,15 +456,10 @@ def ffmpeg_afwtdn(path_in, path_out):
     # command = chatgpt_suggested_mild  # SIGSEGV
     command = chatgpt_suggested_balanced
     # command = chatgpt_suggested_aggressive
-    try:
-        result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
-    except subprocess.CalledProcessError as e:
-        print("FFmpeg stderr:\n")
-        print(e.stderr.decode('utf-8'))
-        raise
+    return run_command(command, pcm_bytes, filename, AFWTDN_PREFIX)
 
 
-def ffmpeg_anlmdn(path_in, path_out):
+def ffmpeg_anlmdn(pcm_bytes, filename):
     """
     Non-Local Means algorithm. Params:
         strength, s
@@ -514,30 +495,27 @@ def ffmpeg_anlmdn(path_in, path_out):
 
     command = [
         'ffmpeg',
-        '-y',
-        '-i', path_in,
+        '-f', DESIRED_FORMAT,       # unchanging input format
+        '-ar', DESIRED_RATE,        # unchanging input rate
+        '-ac', DESIRED_CHANNELS,    # unchanging input channels
+        '-i', 'pipe:0',             # unchanging stdin
         '-filter:a', f'anlmdn=s={strength}:p={patch_size}:r={search_window}:m={smooth_factor}',
-        '-acodec', 'libmp3lame',
-        '-ar', '48000',
-        '-ac', '1',
-        path_out
+        '-f', DESIRED_FORMAT,       # unchanging output format
+        'pipe:1'                    # unchaning stdout
     ]
-
-    try:
-        result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
-    except subprocess.CalledProcessError as e:
-        print("FFmpeg stderr:\n")
-        print(e.stderr.decode('utf-8'))
-        raise
+    return run_command(command, pcm_bytes, filename, ANLMDN_PREFIX)
 
 
-def ffmpeg_adynamicequalizer(path_in, path_out):
+def ffmpeg_adynamicequalizer(pcm_bytes, filename):
     """
     Technically not denoising so much as attenuating undesireable frequencies (e.g. don't belong to human speech).
     """
     mild_voice_denoising_command = [
-        'ffmpeg', '-y',
-        '-i', path_in,
+        'ffmpeg',
+        '-f', DESIRED_FORMAT,       # unchanging input format
+        '-ar', DESIRED_RATE,        # unchanging input rate
+        '-ac', DESIRED_CHANNELS,    # unchanging input channels
+        '-i', 'pipe:0',             # unchanging stdin
         '-filter:a', 'adynamicequalizer='
                      'threshold=20:'
                      'dfrequency=400:'
@@ -553,15 +531,16 @@ def ffmpeg_adynamicequalizer(path_in, path_out):
                      'dftype=0:'  # bandpass
                      'tftype=0:'  # bell
                      'auto=0',
-        '-acodec', 'libmp3lame',
-        '-ar', '48000',
-        '-ac', '1',
-        path_out
+        '-f', DESIRED_FORMAT,       # unchanging output format
+        'pipe:1'                    # unchaning stdout
     ]
 
     moderate_voice_denoising_command = [
-        'ffmpeg', '-y',
-        '-i', path_in,
+        'ffmpeg',
+        '-f', DESIRED_FORMAT,       # unchanging input format
+        '-ar', DESIRED_RATE,        # unchanging input rate
+        '-ac', DESIRED_CHANNELS,    # unchanging input channels
+        '-i', 'pipe:0',             # unchanging stdin
         '-filter:a', 'adynamicequalizer='
                      'threshold=15:'
                      'dfrequency=250:'
@@ -577,15 +556,16 @@ def ffmpeg_adynamicequalizer(path_in, path_out):
                      'dftype=0:'
                      'tftype=0:'
                      'auto=0',
-        '-acodec', 'libmp3lame',
-        '-ar', '48000',
-        '-ac', '1',
-        path_out
+        '-f', DESIRED_FORMAT,       # unchanging output format
+        'pipe:1'                    # unchaning stdout
     ]
 
     aggressive_voice_denoising_command = [
-        'ffmpeg', '-y',
-        '-i', path_in,
+        'ffmpeg',
+        '-f', DESIRED_FORMAT,       # unchanging input format
+        '-ar', DESIRED_RATE,        # unchanging input rate
+        '-ac', DESIRED_CHANNELS,    # unchanging input channels
+        '-i', 'pipe:0',             # unchanging stdin
         '-filter:a', 'adynamicequalizer='
                      'threshold=10:'
                      'dfrequency=200:'
@@ -601,21 +581,14 @@ def ffmpeg_adynamicequalizer(path_in, path_out):
                      'dftype=0:'
                      'tftype=0:'
                      'auto=0',
-        '-acodec', 'libmp3lame',
-        '-ar', '48000',
-        '-ac', '1',
-        path_out
+        '-f', DESIRED_FORMAT,       # unchanging output format
+        'pipe:1'                    # unchaning stdout
     ]
 
     # command = mild_voice_denoising_command
     # command = moderate_voice_denoising_command
     command = aggressive_voice_denoising_command
-    try:
-        result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
-    except subprocess.CalledProcessError as e:
-        print("FFmpeg stderr:\n")
-        print(e.stderr.decode('utf-8'))
-        raise
+    return run_command(command, pcm_bytes, filename, ADYNAMICEQ_PREFIX)
 
 
 def equalizer(pcm_bytes, filename):
@@ -639,16 +612,19 @@ def equalizer(pcm_bytes, filename):
 # region ffmpeg audio normalization
 # =============================================
 def normalization_examples():
+    # sample file ('aimer')
+    filename = 'hypertts-6840f600086fd031f601da7d58c4e6ab98b511d2c9242193b5ecc55b.mp3'
+    filepath = f'{ANKI_DIR}/{filename}'
+    pcm_bytes = _read_mp3_to_pcm_bytes(filepath)
+
     # speechnorm local normalization
-    speechnorm_out = f'{ANKI_DIR}/{SPEECHNORM_PREFIX}_{woman_broadband_quiet}'
-    speechnorm(wbq_in_path, speechnorm_out)
+    speechnorm(pcm_bytes, filename)
 
     # ffmpeg-normalization (e.g. loudnorm wrapper)
-    final_out = f'{ANKI_DIR}/final_{woman_broadband_quiet}'
-    external_tool_ffmpeg_normalize(wbq_in_path, final_out)
+    external_tool_ffmpeg_normalize(pcm_bytes, filename)
 
 
-def speechnorm(path_in, path_out):
+def speechnorm(pcm_bytes, filename):
     """
     speechnorm works locally: it adjusts small “half-cycles” (between zero-crossings) to a peak or rms level, expanding or compressing dynamically.
     speechnorm can enhance quiet syllables or reduce harsh loud bursts — boosting clarity.
@@ -662,34 +638,28 @@ def speechnorm(path_in, path_out):
     """
     command_speechnorm_default = [
         'ffmpeg',
-        '-y',
-        '-i', path_in,
+        '-f', DESIRED_FORMAT,  # unchanging input format
+        '-ar', DESIRED_RATE,  # unchanging input rate
+        '-ac', DESIRED_CHANNELS,  # unchanging input channels
+        '-i', 'pipe:0',  # unchanging stdin
         '-filter:a', 'speechnorm',
-        '-acodec', 'libmp3lame',
-        '-ar', '48000',
-        '-ac', '1',
-        path_out
+        '-f', DESIRED_FORMAT,  # unchanging output format
+        'pipe:1'  # unchaning stdout
     ]
 
     command_speechnorm_recommended = [
         'ffmpeg',
-        '-y',
-        '-i', path_in,
+        '-f', DESIRED_FORMAT,  # unchanging input format
+        '-ar', DESIRED_RATE,  # unchanging input rate
+        '-ac', DESIRED_CHANNELS,  # unchanging input channels
+        '-i', 'pipe:0',  # unchanging stdin
         '-filter:a', 'speechnorm=p=0.90:e=4.0:c=2.0:t=0.15:r=0.002:f=0.001:m=0.0',
-        '-acodec', 'libmp3lame',
-        '-ar', '48000',
-        '-ac', '1',
-        path_out
+        '-f', DESIRED_FORMAT,  # unchanging output format
+        'pipe:1'  # unchaning stdout
     ]
-
     # command = command_speechnorm_default
     command = command_speechnorm_recommended
-    try:
-        result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
-    except subprocess.CalledProcessError as e:
-        print("FFmpeg stderr:\n")
-        print(e.stderr.decode('utf-8'))
-        raise
+    return run_command(command, pcm_bytes, filename, SPEECHNORM_PREFIX)
 
 
 def external_tool_ffmpeg_normalize(pcm_bytes, filename):
