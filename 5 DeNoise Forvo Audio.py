@@ -29,6 +29,7 @@ BACKUP = False # todo toggle to True prior to pushing
 
 USER_PATH = os.path.expanduser('~')
 ANKI_DIR = f'{USER_PATH}/.local/share/Anki2/User 1/collection.media'
+SILENCE_RM_PREFIX = 'silence_rm_'
 NEURAL_NINE_PREFIX = 'n9stft_'
 ARNNDN_PREFIX = 'arnndn_'
 AFFTDN_PREFIX = 'afftdn_'
@@ -37,7 +38,7 @@ ADECLICK_PREFIX = 'adeclick_'
 AFWTDN_PREFIX = 'afwtdn_broadband_'
 ANLMDN_PREFIX = 'anlmdn_broadband_least_'
 ADYNAMICEQ_PREFIX = 'adynamiceq_'
-
+SPEECHNORM_PREFIX = 'speechnorm_'
 
 # aimer
 woman_broadband_quiet = 'hypertts-6840f600086fd031f601da7d58c4e6ab98b511d2c9242193b5ecc55b.mp3'
@@ -47,56 +48,117 @@ wbq_in_path = f'{ANKI_DIR}/{woman_broadband_quiet}'
 hypertts-6840f600086fd031f601da7d58c4e6ab98b511d2c9242193b5ecc55b.mp3
 '''
 
+
 def main():
     if BACKUP:
         backup_audio_collection()
 
-    # potential chains
-    # region x2 afftdn, 1 lp/hp - good at... everything
-    ffmpeg_afftdn(wbq_in_path, afftdn_path_out1)
-    ffmpeg_afftdn(afftdn_path_out1, afftdn_path_out2)
-    ffmpeg_lowpass_highpass(afftdn_path_out2, lowpass_highpass_path_out3)
-    # endregion
+    # remove silence
+    silenceremove_out = f'{ANKI_DIR}/{SILENCE_RM_PREFIX}_{woman_broadband_quiet}'
+    ffmpeg_silenceremove(wbq_in_path, silenceremove_out)
 
-    ffmpeg_arnndn(wbq_in_path, sr_arnndn_wbq_out_path, sr_model) # good at noise removal throughout
-    neural_nine_demo() # good at cleaning front and tail
+    # attempt to remove non-speech (coughing, shuffling, humming)
+    sr_arnndn_wbq_out = f'{ANKI_DIR}/{ARNNDN_PREFIX}_sr_{woman_broadband_quiet}'
+    model_path = 'resources/rnnoise_models'
+    sr_model = f'{model_path}/speech_recording.rnnn'
+    ffmpeg_arnndn(silenceremove_out, sr_arnndn_wbq_out, sr_model)
 
-    return
+    # high/low pass filter
+    lowpass_highpass_out = f'{ANKI_DIR}/{LHPASS_PREFIX}_{woman_broadband_quiet}'
+    ffmpeg_lowpass_highpass(sr_arnndn_wbq_out, lowpass_highpass_out)
+
+    # x3 rounds of afftdn at -25
+    afftdn_out1 = f'{ANKI_DIR}/{AFFTDN_PREFIX}_1_{woman_broadband_quiet}'
+    afftdn_out2 = f'{ANKI_DIR}/{AFFTDN_PREFIX}_2_{woman_broadband_quiet}'
+    afftdn_out3 = f'{ANKI_DIR}/{AFFTDN_PREFIX}_3_{woman_broadband_quiet}'
+    ffmpeg_afftdn(lowpass_highpass_out, afftdn_out1)
+    ffmpeg_afftdn(afftdn_out1, afftdn_out2)
+    ffmpeg_afftdn(afftdn_out2, afftdn_out3)
+
+    # good at cleaning front and tail
+    n9_wbq_out = f'{ANKI_DIR}/{NEURAL_NINE_PREFIX}_{woman_broadband_quiet}'
+    neural_nine_demo(afftdn_out3, n9_wbq_out)
+
+    # skip local volume normalization - it ruins emphasis
+
+    # global volume normalization
+    normalize_out = f'{ANKI_DIR}/normalize_out_{woman_broadband_quiet}'
+    external_tool_ffmpeg_normalize(n9_wbq_out, normalize_out)
+
+    # rebrighten a bit
+    final_out = f'{ANKI_DIR}/final_{woman_broadband_quiet}'
+    equalizer(normalize_out, final_out)
 
 
-def examples():
+def backup_audio_collection():
+    t = datetime.datetime.now()
+    timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
+
+    src_collection = f'{USER_PATH}/.local/share/Anki2/User 1/collection.media'
+    dst_collection = f'{USER_PATH}/.local/share/Anki2/User 1/collection.media.backup_{timestamp}'
+    shutil.copytree(src_collection, dst_collection, dirs_exist_ok=True) # overwriting is a-okay :)
+
+
+# =============================================
+# ffmpeg silence removal - head/tail of audio
+# =============================================
+def ffmpeg_silenceremove(path_in, path_out):
+    """
+    Remove silence from head and tail of audio stream.
+    """
+    command = [
+        'ffmpeg',
+        '-y',
+        '-i', path_in,
+        '-filter:a', 'silenceremove=start_periods=1:start_threshold=0:stop_periods=1:stop_threshold=0:detection=rms',
+        path_out
+    ]
+
+    try:
+        result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
+    except subprocess.CalledProcessError as e:
+        print("FFmpeg stderr:\n")
+        print(e.stderr.decode('utf-8'))
+        raise
+
+
+# =============================================
+# region ffmpeg audio filters
+# =============================================
+
+def denoise_examples():
     # region short time fourier transform filtering from youtuber 'Neural Nine'
-    n9_wbq_out_path = f'{ANKI_DIR}/{NEURAL_NINE_PREFIX}_{woman_broadband_quiet}'
-    neural_nine_demo(wbq_in_path, n9_wbq_out_path)
+    n9_wbq_out = f'{ANKI_DIR}/{NEURAL_NINE_PREFIX}_{woman_broadband_quiet}'
+    neural_nine_demo(wbq_in_path, n9_wbq_out)
     # endregion
 
     # region neural network rnnoise models
     model_path = 'resources/rnnoise_models'
-    gg_arnndn_wbq_out_path = f'{ANKI_DIR}/{ARNNDN_PREFIX}_gg_{woman_broadband_quiet}'
+    gg_arnndn_wbq_out = f'{ANKI_DIR}/{ARNNDN_PREFIX}_gg_{woman_broadband_quiet}'
     gg_model = f'{model_path}/general_general.rnnn'
-    gr_arnndn_wbq_out_path = f'{ANKI_DIR}/{ARNNDN_PREFIX}_gr_{woman_broadband_quiet}'
+    gr_arnndn_wbq_out = f'{ANKI_DIR}/{ARNNDN_PREFIX}_gr_{woman_broadband_quiet}'
     gr_model = f'{model_path}/general_recording.rnnn'
-    vg_arnndn_wbq_out_path = f'{ANKI_DIR}/{ARNNDN_PREFIX}_vg_{woman_broadband_quiet}'
+    vg_arnndn_wbq_out = f'{ANKI_DIR}/{ARNNDN_PREFIX}_vg_{woman_broadband_quiet}'
     vg_model = f'{model_path}/voice_general.rnnn'
-    vr_arnndn_wbq_out_path = f'{ANKI_DIR}/{ARNNDN_PREFIX}_vr_{woman_broadband_quiet}'
+    vr_arnndn_wbq_out = f'{ANKI_DIR}/{ARNNDN_PREFIX}_vr_{woman_broadband_quiet}'
     vr_model = f'{model_path}/voice_recording.rnnn'
-    sr_arnndn_wbq_out_path = f'{ANKI_DIR}/{ARNNDN_PREFIX}_sr_{woman_broadband_quiet}'
+    sr_arnndn_wbq_out = f'{ANKI_DIR}/{ARNNDN_PREFIX}_sr_{woman_broadband_quiet}'
     sr_model = f'{model_path}/speech_recording.rnnn'
 
-    ffmpeg_arnndn(wbq_in_path, gg_arnndn_wbq_out_path, gg_model)
-    ffmpeg_arnndn(wbq_in_path, gr_arnndn_wbq_out_path, gr_model)
-    ffmpeg_arnndn(wbq_in_path, vg_arnndn_wbq_out_path, vg_model)
-    ffmpeg_arnndn(wbq_in_path, vr_arnndn_wbq_out_path, vr_model)
-    ffmpeg_arnndn(wbq_in_path, sr_arnndn_wbq_out_path, sr_model)
+    ffmpeg_arnndn(wbq_in_path, gg_arnndn_wbq_out, gg_model)
+    ffmpeg_arnndn(wbq_in_path, gr_arnndn_wbq_out, gr_model)
+    ffmpeg_arnndn(wbq_in_path, vg_arnndn_wbq_out, vg_model)
+    ffmpeg_arnndn(wbq_in_path, vr_arnndn_wbq_out, vr_model)
+    ffmpeg_arnndn(wbq_in_path, sr_arnndn_wbq_out, sr_model)
     # endregion
 
     # region S.O. two afftdn passes followed by highpass & lowpass filter
-    afftdn_path_out1 = f'{ANKI_DIR}/{AFFTDN_PREFIX}_pass1_{woman_broadband_quiet}'
-    afftdn_path_out2 = f'{ANKI_DIR}/{AFFTDN_PREFIX}_pass2_{woman_broadband_quiet}'
-    lowpass_highpass_path_out3 = f'{ANKI_DIR}/{LHPASS_PREFIX}_{woman_broadband_quiet}'
-    ffmpeg_afftdn(wbq_in_path, afftdn_path_out1)
-    ffmpeg_afftdn(afftdn_path_out1, afftdn_path_out2)
-    ffmpeg_lowpass_highpass(afftdn_path_out2, lowpass_highpass_path_out3)
+    lowpass_highpass_out = f'{ANKI_DIR}/{LHPASS_PREFIX}_{woman_broadband_quiet}'
+    afftdn_out1 = f'{ANKI_DIR}/{AFFTDN_PREFIX}_pass1_{woman_broadband_quiet}'
+    afftdn_out2 = f'{ANKI_DIR}/{AFFTDN_PREFIX}_pass2_{woman_broadband_quiet}'
+    ffmpeg_lowpass_highpass(wbq_in_path, lowpass_highpass_out)
+    ffmpeg_afftdn(lowpass_highpass_out, afftdn_out1)
+    ffmpeg_afftdn(afftdn_out1, afftdn_out2)
     # endregion
 
     # adeclick - impulsive filtering
@@ -117,15 +179,6 @@ def examples():
     ffmpeg_adynamicequalizer(wbq_in_path, adynamicequalizer_out)
 
     return
-
-
-def backup_audio_collection():
-    t = datetime.datetime.now()
-    timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
-
-    src_collection = f'{USER_PATH}/.local/share/Anki2/User 1/collection.media'
-    dst_collection = f'{USER_PATH}/.local/share/Anki2/User 1/collection.media.backup_{timestamp}'
-    shutil.copytree(src_collection, dst_collection, dirs_exist_ok=True) # overwriting is a-okay :)
 
 
 def neural_nine_demo(path_in, path_out):
@@ -161,7 +214,7 @@ def ffmpeg_arnndn(path_in, path_out, rel_model_path, mix=1):
 
     # rnnoise operates on RAW 16-bit (machine endian) mono - convert mp3
     raw_pcm_bytes = _convert_mp3_to_pcm_bytes(path_in)
-    denoise_pcm_to_mp3(raw_pcm_bytes, path_out, abs_model_path, mix)
+    _denoise_pcm_to_mp3(raw_pcm_bytes, path_out, abs_model_path, mix)
 
 
 def _convert_mp3_to_pcm_bytes(input_path: str) -> bytes:
@@ -179,7 +232,7 @@ def _convert_mp3_to_pcm_bytes(input_path: str) -> bytes:
     return result.stdout  # Raw PCM bytes
 
 
-def denoise_pcm_to_mp3(pcm_bytes: bytes, path_out, model_path, mix=1):
+def _denoise_pcm_to_mp3(pcm_bytes: bytes, path_out, model_path, mix=1):
     command = [
         'ffmpeg',
         '-f', 's16le',             # raw PCM format
@@ -244,7 +297,7 @@ def ffmpeg_lowpass_highpass(path_in, path_out):
         'ffmpeg',
         '-y',
         '-i', path_in,
-        '-filter:a', f'highpass=f=200, lowpass=f=3000',
+        '-filter:a', f'highpass=f=100, lowpass=f=3000',
         '-acodec', 'libmp3lame',        # MP3 encoder
         '-f', 'mp3',                    # output format
         '-ac', '1',
@@ -268,18 +321,18 @@ def ffmpeg_adeclick(path_in, path_out):
 
     Filter explanation (gist: uses slightly more aggressive noise removal)
     -af 'adeclick=w=60:o=85:a=10:t=3:b=5:m=s'
-         │   │   │   │   │   └── overlap-save method
-         │   │   │   │   └───── burst fusion = 5% of window
-         │   │   │   └───────── threshold = 3
-         │   │   └───────────── autoregression order = 10% of window
-         │   └───────────────── overlap = 85%
-         └───────────────────── window size = 60 ms
+         │   │   │   │   │   └── overlap-save method                    [a or s]
+         │   │   │   │   └───── burst fusion = 5% of window             [0, 2]
+         │   │   │   └───────── threshold = 3                           [1, 100]
+         │   │   └───────────── autoregression order = 10% of window    [0, 25]
+         │   └───────────────── overlap = 85%                           [50, 95]
+         └───────────────────── window size = 60 ms                     [10, 100]
     """
     command = [
         'ffmpeg',
         '-y',
         '-i', path_in,
-        '-filter:a', 'adeclick=w=60:o=85:a=10:t=3:b=5:m=s',
+        '-filter:a', 'adeclick=w=10:o=95:a=0:t=1:b=0:m=s',
         '-acodec', 'libmp3lame',
         '-ar', '48000',
         '-ac', '1',
@@ -373,14 +426,43 @@ def ffmpeg_afwtdn(path_in, path_out):
 
 def ffmpeg_anlmdn(path_in, path_out):
     """
-    todo
-        The expected values don't match the documentation for both p= and r=. Wack.
+    Non-Local Means algorithm. Params:
+        strength, s
+            Set denoising strength. Allowed range is from 0.00001 to 10000. Default value is 0.00001.
+            More denoising means less noise also means less signal. I think this is a fuzzy term describing weighting/number of passes.
+        patch, p
+            Set patch radius duration. Allowed range is from 1 to 100 milliseconds. Default value is 2 milliseconds.
+        research, r
+            Set research radius duration. Allowed range is from 2 to 300 milliseconds. Default value is 6 milliseconds.
+        output, o
+            Set the output mode.
+            It accepts the following values:
+            i
+                Pass input unchanged.
+            o
+                Pass noise filtered out.
+            n
+                Pass only noise.
+                Default value is o.
+        smooth, m
+            Set smooth factor. Default value is 11. Allowed range is from 1 to 1000.
+
+    Arthur Szlam UCLA Cam Report Recommendations for speech denoising:
+        patch_size: 0.01-0.05s for speech
+        search_window_size: search windows one to two times the patch size seem to work well for speech
+        theta = infinity?
+        number of neighbors: choose just enough neighbors so one can see this banded structure ??
     """
+    strength = 0.0008
+    patch_size = 0.03
+    search_window = patch_size*2
+    smooth_factor = 10
+
     command = [
         'ffmpeg',
         '-y',
         '-i', path_in,
-        '-filter:a', 'anlmdn=s=0.00001:p=0.01:r=0.002:o=o:m=11',
+        '-filter:a', f'anlmdn=s={strength}:p={patch_size}:r={search_window}:m={smooth_factor}',
         '-acodec', 'libmp3lame',
         '-ar', '48000',
         '-ac', '1',
@@ -482,5 +564,117 @@ def ffmpeg_adynamicequalizer(path_in, path_out):
         raise
 
 
+def equalizer(path_in, path_out):
+    command = [
+        'ffmpeg',
+        '-y',
+        '-i', path_in,
+        '-af', 'equalizer=f=80:t=q:w=1:g=6,equalizer=f=8000:t=q:w=1:g=5',
+        '-c:a', 'libmp3lame',
+        '-q:a', '3',
+        path_out
+    ]
+
+    try:
+        result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
+    except subprocess.CalledProcessError as e:
+        print("FFmpeg stderr:\n")
+        print(e.stderr.decode('utf-8'))
+        raise
+
+
+# =============================================
+# endregion
+# =============================================
+
+# =============================================
+# region ffmpeg audio normalization
+# =============================================
+def normalization_examples():
+    # speechnorm local normalization
+    speechnorm_out = f'{ANKI_DIR}/{SPEECHNORM_PREFIX}_{woman_broadband_quiet}'
+    speechnorm(wbq_in_path, speechnorm_out)
+
+    # ffmpeg-normalization (e.g. loudnorm wrapper)
+    final_out = f'{ANKI_DIR}/final_{woman_broadband_quiet}'
+    external_tool_ffmpeg_normalize(wbq_in_path, final_out)
+
+
+def speechnorm(path_in, path_out):
+    """
+    speechnorm works locally: it adjusts small “half-cycles” (between zero-crossings) to a peak or rms level, expanding or compressing dynamically.
+    speechnorm can enhance quiet syllables or reduce harsh loud bursts — boosting clarity.
+    After speechnorm, peaks might be too close to full scale (e.g., p=0.98 = –0.17 dBFS).
+    ➤ Using speechnorm first smooths out micro-variability (e.g., syllables)
+
+    loudnorm works globally: it adjusts the entire signal to a target integrated loudness, true peak, and loudness range (per ITU-R BS.1770).
+    loudnorm then applies a final global adjustment — ensuring volume matches other files or playback environments (e.g., YouTube, Anki, podcasting).
+    loudnorm includes true peak limiting (e.g., TP=-1.5) to catch any overshoots before final encode.
+    ➤ Then loudnorm ensures overall compliance with broadcast-level targets.
+    """
+    command_speechnorm_default = [
+        'ffmpeg',
+        '-y',
+        '-i', path_in,
+        '-filter:a', 'speechnorm',
+        '-c:a', 'libmp3lame',
+        '-ar', '48000',
+        '-ac', '1',
+        path_out
+    ]
+
+    command_speechnorm_recommended = [
+        'ffmpeg',
+        '-y',
+        '-i', path_in,
+        '-filter:a', 'speechnorm=p=0.90:e=4.0:c=2.0:t=0.15:r=0.002:f=0.001:m=0.0',
+        '-c:a', 'libmp3lame',
+        '-ar', '48000',
+        '-ac', '1',
+        path_out
+    ]
+
+    # command = command_speechnorm_default
+    command = command_speechnorm_recommended
+    try:
+        result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
+    except subprocess.CalledProcessError as e:
+        print("FFmpeg stderr:\n")
+        print(e.stderr.decode('utf-8'))
+        raise
+
+
+def external_tool_ffmpeg_normalize(path_in, path_out):
+    """
+    Normalize audio using EBU R128 loudness normalization procedure.
+    """
+    command = [
+        'ffmpeg-normalize',
+        path_in,
+        '-o', path_out,
+        '-nt', 'ebu',           # global loudness normalization
+        '-t', '-23',            # target loudness (LUFS)
+        '-lrt', '7',            # preserve some dynamic range
+        '-c:a', 'libmp3lame',   # output codec
+        # '-q:a', '3',          # todo VBR quality (2=~190kbps, 3=~175kbps) breaks ffmpeg-normalize for some reason, leave default
+        '-ar', '44100',         # match input sample rate
+        '-ac', '1',             # mono output
+        '-f'                    # overwrite output if needed
+    ]
+
+    try:
+        result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
+    except subprocess.CalledProcessError as e:
+        print("FFmpeg stderr:\n")
+        print(e.stderr.decode('utf-8'))
+        raise
+    return
+
+# =============================================
+# endregion
+# =============================================
+
+
 if __name__ == '__main__':
     main()
+    # denoise_examples()
