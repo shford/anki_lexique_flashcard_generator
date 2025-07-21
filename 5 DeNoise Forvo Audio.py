@@ -24,15 +24,20 @@ from scipy.signal import medfilt
 
 
 # ==== Configuration ====
-BACKUP = True # todo toggle to True prior to pushing
+BACKUP = False # todo toggle to True prior to pushing
 # ========================
 
 USER_PATH = os.path.expanduser('~')
 ANKI_DIR = f'{USER_PATH}/.local/share/Anki2/User 1/collection.media'
-NEURAL_NINE_PREFIX = 'n9_'
+NEURAL_NINE_PREFIX = 'n9stft_'
 ARNNDN_PREFIX = 'arnndn_'
 AFFTDN_PREFIX = 'afftdn_'
 LHPASS_PREFIX = 'lhpass_'
+ADECLICK_PREFIX = 'adeclick_'
+AFWTDN_PREFIX = 'afwtdn_broadband_'
+ANLMDN_PREFIX = 'anlmdn_broadband_least_'
+ADYNAMICEQ_PREFIX = 'adynamiceq_'
+
 
 # aimer
 woman_broadband_quiet = 'hypertts-6840f600086fd031f601da7d58c4e6ab98b511d2c9242193b5ecc55b.mp3'
@@ -46,8 +51,17 @@ def main():
     if BACKUP:
         backup_audio_collection()
 
+    # potential chains
+    # region x2 afftdn, 1 lp/hp - good at... everything
+    ffmpeg_afftdn(wbq_in_path, afftdn_path_out1)
+    ffmpeg_afftdn(afftdn_path_out1, afftdn_path_out2)
+    ffmpeg_lowpass_highpass(afftdn_path_out2, lowpass_highpass_path_out3)
+    # endregion
 
-    examples()
+    ffmpeg_arnndn(wbq_in_path, sr_arnndn_wbq_out_path, sr_model) # good at noise removal throughout
+    neural_nine_demo() # good at cleaning front and tail
+
+    return
 
 
 def examples():
@@ -82,16 +96,27 @@ def examples():
     lowpass_highpass_path_out3 = f'{ANKI_DIR}/{LHPASS_PREFIX}_{woman_broadband_quiet}'
     ffmpeg_afftdn(wbq_in_path, afftdn_path_out1)
     ffmpeg_afftdn(afftdn_path_out1, afftdn_path_out2)
-    # todo hanging at ffmpeg_lowpass_highpass(afftdn_path_out2, lowpass_highpass_path_out3)
+    ffmpeg_lowpass_highpass(afftdn_path_out2, lowpass_highpass_path_out3)
     # endregion
 
     # adeclick - impulsive filtering
+    adeclick_out = f'{ANKI_DIR}/{ADECLICK_PREFIX}_{woman_broadband_quiet}'
+    ffmpeg_adeclick(wbq_in_path, adeclick_out)
 
-    # afwtdn / anldmn - broadband filtering
+    # afwtdn - broadband filtering
+    # I found this one to be uniquely bad. Maybe I just didn't tweak it enough.
+    afwtdn_out = f'{ANKI_DIR}/{AFWTDN_PREFIX}_{woman_broadband_quiet}'
+    ffmpeg_afwtdn(wbq_in_path, afwtdn_out)
 
-    #
+    # anldmn - broadband filtering (ref UCLA math article/heat equation)
+    anlmdn_out = f'{ANKI_DIR}/{ANLMDN_PREFIX}_{woman_broadband_quiet}'
+    ffmpeg_anlmdn(wbq_in_path, anlmdn_out)
 
-    #
+    # adynamicequalizer - attenuate unwanted freqs
+    adynamicequalizer_out = f'{ANKI_DIR}/{ADYNAMICEQ_PREFIX}_{woman_broadband_quiet}'
+    ffmpeg_adynamicequalizer(wbq_in_path, adynamicequalizer_out)
+
+    return
 
 
 def backup_audio_collection():
@@ -190,8 +215,9 @@ def ffmpeg_afftdn(path_in, path_out):
     """
     command = [
         'ffmpeg',
+        '-y',
         '-i', path_in,
-        '-filter:a', f'afftdn=nf=-25',
+        '-filter:a', 'afftdn=nf=-25',
         '-acodec', 'libmp3lame',        # MP3 encoder
         '-f', 'mp3',                    # output format
         '-ac', '1',
@@ -216,8 +242,9 @@ def ffmpeg_lowpass_highpass(path_in, path_out):
     """
     command = [
         'ffmpeg',
+        '-y',
         '-i', path_in,
-        '-filter:a', f'highpass=f=200, lowpass=f=300',
+        '-filter:a', f'highpass=f=200, lowpass=f=3000',
         '-acodec', 'libmp3lame',        # MP3 encoder
         '-f', 'mp3',                    # output format
         '-ac', '1',
@@ -233,17 +260,226 @@ def ffmpeg_lowpass_highpass(path_in, path_out):
         raise
 
 
-def adeclick():
-    return
+def ffmpeg_adeclick(path_in, path_out):
+    """
+    reference command:
+    ffmpeg -y -i <path_in> -af 'adeclick=w=60:o=85:a=10:t=3:b=5:m=s'
+     -acodec libmp3lame -ar 48000 -ac 1 <path_out>
 
-def afwtdn():
-    return
+    Filter explanation (gist: uses slightly more aggressive noise removal)
+    -af 'adeclick=w=60:o=85:a=10:t=3:b=5:m=s'
+         │   │   │   │   │   └── overlap-save method
+         │   │   │   │   └───── burst fusion = 5% of window
+         │   │   │   └───────── threshold = 3
+         │   │   └───────────── autoregression order = 10% of window
+         │   └───────────────── overlap = 85%
+         └───────────────────── window size = 60 ms
+    """
+    command = [
+        'ffmpeg',
+        '-y',
+        '-i', path_in,
+        '-filter:a', 'adeclick=w=60:o=85:a=10:t=3:b=5:m=s',
+        '-acodec', 'libmp3lame',
+        '-ar', '48000',
+        '-ac', '1',
+        path_out
+    ]
 
-def anlmdn():
-    return
+    try:
+        result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
+    except subprocess.CalledProcessError as e:
+        print("FFmpeg stderr:\n")
+        print(e.stderr.decode('utf-8'))
+        raise
 
-def libvmaf():
-    return
+
+def ffmpeg_afwtdn(path_in, path_out):
+    """
+    I hate this one. Maybe tweaking would help? Maybe not.
+
+    todo
+        - More of a weird note really, the default and mild commands both SIGSEGV's. The issue must
+          presumably be in the underlying ffmpeg C/C++ files. I tried several variations of the arguments.
+          I'm pretty sure I narrowed the issues down to the wavets: sym2 & sym4.
+           Installed version at the time of writing was ffmpeg version 6.1.1-3ubuntu5 on Ubuntu 24.04.3.
+
+    reference command:
+    ffmpeg -y -i <path_in>
+     -af 'afwtdn=sigma=0:levels=10:wavet=sym2:percent=85:profile=0:adaptive=0:samples=8192:softness=1'
+     -acodec libmp3lame -ar 48000 -ac 1 <path_out>
+    """
+    # region command declarations
+    command_with_defaults = [
+        'ffmpeg',
+        '-y',
+        '-i', path_in,
+        '-filter:a', 'afwtdn=sigma=0:levels=10:wavet=sym2:percent=85:adaptive=0:samples=8192:softness=1',
+        # '-filter:a', 'afwtdn=sigma=0:levels=10:wavet=sym2:percent=85:profile=0:adaptive=0:samples=8192:softness=1',
+        '-acodec', 'libmp3lame',
+        '-ar', '48000',
+        '-ac', '1',
+        path_out
+    ]
+
+    chatgpt_suggested_mild = [
+        'ffmpeg',
+        '-y',
+        '-i', path_in,
+        '-filter:a', 'afwtdn=sigma=0.005:levels=6:wavet=sym4:percent=75:adaptive=0:samples=8192:softness=1',
+        # '-filter:a', 'afwtdn=sigma=0.005:levels=6:wavet=sym4:percent=75:profile=0:adaptive=0:samples=8192:softness=1',
+        '-acodec', 'libmp3lame',
+        '-ar', '48000',
+        '-ac', '1',
+        path_out
+    ]
+
+    chatgpt_suggested_balanced = [
+        'ffmpeg',
+        '-y',
+        '-i', path_in,
+        # '-filter:a', 'afwtdn=sigma=0.01:levels=8:wavet=coif5:percent=95:adaptive=1:samples=16384:softness=3',
+        '-filter:a', 'afwtdn=sigma=0.01:levels=8:wavet=coif5:percent=95:profile=1:adaptive=0:samples=16384:softness=3',
+        '-acodec', 'libmp3lame',
+        '-ar', '48000',
+        '-ac', '1',
+        path_out
+    ]
+
+    chatgpt_suggested_aggressive = [
+        'ffmpeg',
+        '-y',
+        '-i', path_in,
+        '-filter:a', 'afwtdn=sigma=0.02:levels=10:wavet=bl3:percent=100:adaptive=1:samples=32768:softness=5',
+        # '-filter:a', 'afwtdn=sigma=0.02:levels=10:wavet=bl3:percent=100:profile=1:adaptive=1:samples=32768:softness=5',
+        '-acodec', 'libmp3lame',
+        '-ar', '48000',
+        '-ac', '1',
+        path_out
+    ]
+    # endregion
+
+    # command = command_with_defaults   # SIGSEGV
+    # command = chatgpt_suggested_mild  # SIGSEGV
+    command = chatgpt_suggested_balanced
+    # command = chatgpt_suggested_aggressive
+    try:
+        result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
+    except subprocess.CalledProcessError as e:
+        print("FFmpeg stderr:\n")
+        print(e.stderr.decode('utf-8'))
+        raise
+
+
+def ffmpeg_anlmdn(path_in, path_out):
+    """
+    todo
+        The expected values don't match the documentation for both p= and r=. Wack.
+    """
+    command = [
+        'ffmpeg',
+        '-y',
+        '-i', path_in,
+        '-filter:a', 'anlmdn=s=0.00001:p=0.01:r=0.002:o=o:m=11',
+        '-acodec', 'libmp3lame',
+        '-ar', '48000',
+        '-ac', '1',
+        path_out
+    ]
+
+    try:
+        result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
+    except subprocess.CalledProcessError as e:
+        print("FFmpeg stderr:\n")
+        print(e.stderr.decode('utf-8'))
+        raise
+
+
+def ffmpeg_adynamicequalizer(path_in, path_out):
+    """
+    Technically not denoising so much as attenuating undesireable frequencies (e.g. don't belong to human speech).
+    """
+    mild_voice_denoising_command = [
+        'ffmpeg', '-y',
+        '-i', path_in,
+        '-filter:a', 'adynamicequalizer='
+                     'threshold=20:'
+                     'dfrequency=400:'
+                     'dqfactor=2:'
+                     'tfrequency=400:'
+                     'tqfactor=2:'
+                     'attack=20:'
+                     'release=200:'
+                     'ratio=1.5:'
+                     'makeup=1:'
+                     'range=10:'
+                     'mode=1:'    # cutbelow
+                     'dftype=0:'  # bandpass
+                     'tftype=0:'  # bell
+                     'auto=0',
+        '-acodec', 'libmp3lame',
+        '-ar', '48000',
+        '-ac', '1',
+        path_out
+    ]
+
+    moderate_voice_denoising_command = [
+        'ffmpeg', '-y',
+        '-i', path_in,
+        '-filter:a', 'adynamicequalizer='
+                     'threshold=15:'
+                     'dfrequency=250:'
+                     'dqfactor=3:'
+                     'tfrequency=250:'
+                     'tqfactor=2.5:'
+                     'attack=15:'
+                     'release=150:'
+                     'ratio=2.5:'
+                     'makeup=2:'
+                     'range=20:'
+                     'mode=1:'
+                     'dftype=0:'
+                     'tftype=0:'
+                     'auto=0',
+        '-acodec', 'libmp3lame',
+        '-ar', '48000',
+        '-ac', '1',
+        path_out
+    ]
+
+    aggressive_voice_denoising_command = [
+        'ffmpeg', '-y',
+        '-i', path_in,
+        '-filter:a', 'adynamicequalizer='
+                     'threshold=10:'
+                     'dfrequency=200:'
+                     'dqfactor=4:'
+                     'tfrequency=200:'
+                     'tqfactor=3:'
+                     'attack=10:'
+                     'release=100:'
+                     'ratio=4:'
+                     'makeup=3:'
+                     'range=30:'
+                     'mode=1:'
+                     'dftype=0:'
+                     'tftype=0:'
+                     'auto=0',
+        '-acodec', 'libmp3lame',
+        '-ar', '48000',
+        '-ac', '1',
+        path_out
+    ]
+
+    # command = mild_voice_denoising_command
+    # command = moderate_voice_denoising_command
+    command = aggressive_voice_denoising_command
+    try:
+        result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
+    except subprocess.CalledProcessError as e:
+        print("FFmpeg stderr:\n")
+        print(e.stderr.decode('utf-8'))
+        raise
 
 
 if __name__ == '__main__':
