@@ -86,11 +86,11 @@ def main():
 
     # parallelize
     print(f'Executing denoising program on {len(mp3_filenames)} files.\n')
-    # with Pool(processes=cpu_count()) as pool:
-    #     pool.map(process_audio_file, mp3_filenames)
+    with Pool(processes=cpu_count()) as pool:
+        pool.map(process_audio_file, mp3_filenames)
     # old serial processing for easy debugging/profiling
-    for filename in mp3_filenames:
-        process_audio_file(filename)
+    # for filename in mp3_filenames:
+    #     process_audio_file(filename)
 
     if len(corrupt_files) > 0:
         print('\nDetected the following corrupted audio files during runtime:')
