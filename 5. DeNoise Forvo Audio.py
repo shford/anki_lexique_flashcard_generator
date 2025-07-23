@@ -78,7 +78,6 @@ def main():
     # populate filenames
     dir_contents = os.listdir(ANKI_DIR)
     mp3_filenames = [f for f in dir_contents if (os.path.isfile(os.path.join(ANKI_DIR, f)) and 'hypertts' in f)]
-    mp3_filenames = mp3_filenames[0:10]
 
     if CHECK_FOR_CORRUPT_FILES:
         num_corrupt_audio_files_prior = get_num_corrupt_audio_files(mp3_filenames)
