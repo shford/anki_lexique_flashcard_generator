@@ -81,7 +81,7 @@ def main():
 
     if CHECK_FOR_CORRUPT_FILES:
         num_corrupt_audio_files_prior = get_num_corrupt_audio_files(mp3_filenames)
-        print(f'Prior to running: found {num_corrupt_audio_files_prior} audio files in directory:\n\t{ANKI_DIR}.\n')
+        print(f'Prior to running: found {num_corrupt_audio_files_prior} corrupt audio files in directory:\n{ANKI_DIR}.\n')
 
     # parallelize
     print(f'Executing denoising program on {len(mp3_filenames)} files.\n')
@@ -101,8 +101,8 @@ def main():
         if num_corrupt_audio_files_after != num_corrupt_audio_files_prior:
             print('Error detected. Recommend cease use. The cause may be an outside program, but'
                   'there are more audio files corrupted after this program executed than before.'
-                  f'Recommend restoring from back at in directory:\n\t{USER_PATH}/.local/share/Anki2/User 1/\n')
-        print(f'After running: found {num_corrupt_audio_files_after} audio files in directory:\n\t{ANKI_DIR}.\n')
+                  f'Recommend restoring from back at in directory:\n{USER_PATH}/.local/share/Anki2/User 1/\n')
+        print(f'After running: found {num_corrupt_audio_files_after} corrupt audio files in directory:\n{ANKI_DIR}.\n')
 
     print(f'\nWrote {len(mp3_filenames)} new files.')
 
