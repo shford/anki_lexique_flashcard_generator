@@ -24,7 +24,7 @@ import pandas as pd
 
 # === Configuration variables ===
 USER_PATH = os.path.expanduser('~')
-INPUT_CSV = f'{USER_PATH}/Documents/flashcard_project_new/lexique_exported_files/Freq 501 - 1000.csv'
+INPUT_CSV = f'{USER_PATH}/Documents/flashcard_project_new/lexique_exported_files/Freq 1 - 500.csv'
 OUTPUT_DIR = f'{USER_PATH}/Documents/flashcard_project_new/anki_lexique_imports'
 OUTPUT_PREFIX = 'anki_deck_'
 CHUNK_SIZE = 500
@@ -37,7 +37,7 @@ DECK_NAME = 'lexique_deck_sub1'
 # === End Config ===
 
 # POS priority for sorting and filtering
-POS_PRIORITY = ['adj', 'adv', 'pre', 'ver', 'ono', 'nom', 'con']
+POS_PRIORITY = ['adj', 'adv', 'prep', 'ver', 'ono', 'n', 'con']
 
 
 @dataclass
@@ -407,7 +407,7 @@ def format_noun_declension(lemme, rows, pos, pronunciation, chunk_idx, export_ro
             return None
         return noun_decl
 
-    if pos in {'ver', 'adv', 'pre', 'con', 'ono'}:
+    if pos in {'ver', 'adv', 'prep', 'con', 'ono'}:
         noun_decl = singular_bold(lemme, pos)
     else:
         num_rows = len(rows)
@@ -435,7 +435,7 @@ def format_noun_declension(lemme, rows, pos, pronunciation, chunk_idx, export_ro
 
         # just treat lemme as singular adj - e.g. give up and settle for bolding the lemme
         noun_decl = bold_wrapper(lemme)
-    elif isinstance(noun_decl, list):  # note: can only occur from pos=='nom'
+    elif isinstance(noun_decl, list):  # note: can only occur from pos is noun
         # assign 'English Translation'
         male_translation = translate(f'le {lemme}', pos, deepl_client, deepl_src_lang, deepl_tgt_lang,
                                      translation_pairs).replace('the ', '')
@@ -452,7 +452,7 @@ def format_noun_declension(lemme, rows, pos, pronunciation, chunk_idx, export_ro
             # correct false positive homo, homo, same lemme diff meaning row_2() conditional -> mpf (probably)
             # _ s
             # _ p
-            noun_decl = mpf_det_bold(lemme, 'nom', card.sing, card.plural, card.sing)
+            noun_decl = mpf_det_bold(lemme, 'n', card.sing, card.plural, card.sing)
             translation = male_translation.replace('', '')
             update_export_rows(lemme, pos, noun_decl, pronunciation, translation, chunk_idx, export_rows)
             return None # move to next lemme
@@ -529,7 +529,7 @@ def row2_func(rows, rs, lemme, pos, card):
     r2_genre = row2['genre']
     r2_nombre = row2['nombre']
 
-    # 'adj' or 'nom'
+    # 'adj' or 'n'
     if rs.num_m_s == 1 and rs.num_f_s == 1:
         #   genre   nombre  |   genre   nombre
         #     m       s     |     f       s
@@ -537,7 +537,7 @@ def row2_func(rows, rs, lemme, pos, card):
         return ms_fs_bold(lemme, pos, rs.rows_m_s.iloc[0]['ortho'], rs.rows_f_s.iloc[0]['ortho'])
 
     # nom
-    if pos == 'nom':
+    if pos == 'n':
         # homophone, homonym, diff lemmas
         if rs.num_genre_na == 2 and rs.num_s == 1 and rs.num_p == 1:
             """
@@ -659,7 +659,7 @@ def row3_func(rows, rs, lemme, pos):
     row2 = rows.iloc[1]
     row3 = rows.iloc[2]
 
-    if pos == 'nom' or pos == 'adj':
+    if pos == 'n' or pos == 'adj':
         if rs.num_m_s == 1 and rs.num_m_p == 1 and rs.num_f_p == 1:
             # this is going to be an exception where we're not going to choose one
             # in this case we got ['tueur', 'tueurs', 'tueuses'] which ought to be
@@ -670,7 +670,7 @@ def row3_func(rows, rs, lemme, pos):
             ortho_m_p = rs.rows_m_p.iloc[0]['ortho']
             ortho_f_p = rs.rows_f_p.iloc[0]['ortho']
             return four_bold(lemme, pos, ortho_m_s, ortho_f_s, ortho_m_p, ortho_f_p)
-    if pos == 'nom':
+    if pos == 'n':
         #     genre       nombre
         # ( m | f | _ )     p
         # ( m | f | _ )     p
@@ -769,7 +769,7 @@ def row3_func(rows, rs, lemme, pos):
 
 
 def row4_func(rows, rs, lemme, pos):
-    if pos == 'nom':
+    if pos == 'n':
         # count missing fields per row
         missing_genre_mask = rows['genre'].isna()
         missing_nombre_mask = rows['nombre'].isna()
@@ -891,7 +891,7 @@ def row4_func(rows, rs, lemme, pos):
             fpl = rs.rows_f_p
 
             if rs.num_na_s == 1 and rs.num_na_p == 1 and rs.num_f_s == 1 and rs.num_f_p == 1:
-                # works for 'adj' and 'nom' - assumes male is more likely than two archaics
+                # works for 'adj' and 'n' - assumes male is more likely than two archaics
                 #   genre   nombre
                 #     _       s     ->  m   s
                 #     _       p     ->  m   p
@@ -978,14 +978,14 @@ def handle_hard_coded_formats(rows, lemme):
 
     # region exception because singular ortho is missing from lexique
     if lemme == 'fois':
-        return sp_bold(lemme, 'nom', lemme, lemme, 'f')
+        return sp_bold(lemme, 'n', lemme, lemme, 'f')
     # endregion
 
     # region exceptions for unique/archaic/rare poetic spellings (that can't be corrected easily w/ rules)
     if lemme == 'oeil':
-        return sp_bold(lemme, 'nom', lemme, 'yeux', 'm')
+        return sp_bold(lemme, 'n', lemme, 'yeux', 'm')
     elif lemme == 'lieu':
-        return sp_bold(lemme, 'nom', lemme, 'lieux', 'm')
+        return sp_bold(lemme, 'n', lemme, 'lieux', 'm')
     elif lemme == 'aïeul':
         ms_text = 'le aïeul'
         literal_mpl_text = 'les aïeuls'
@@ -1017,7 +1017,7 @@ def singular_bold(ortho_s, pos, genre=None) -> str:
     """
     :return: formatted string for one singular
     """
-    if pos == 'nom':
+    if pos == 'n':
         if genre is None:
             raise Exception('Invalid arguments passed to singular_bold() for where pos is nom')
         elif genre == 'm':
@@ -1037,7 +1037,7 @@ def plural_bold(plural_ortho, pos, genre=None) -> str:
     :return: formatted string for one plural
     """
     plural_text = f'les {plural_ortho}'
-    if pos == 'nom':
+    if pos == 'n':
         if genre == 'm':
             return f'{span_wrapper(text=plural_text, is_bold=True, genre='m')}'
         elif genre == 'f':
@@ -1054,7 +1054,7 @@ def ms_fs_bold(lemme, pos, ortho_ms, ortho_fs) -> str:
     :return: formatted one masculine singular and one feminine singular
     """
     # shout [grand-papa, grand-mama]
-    if pos == 'nom':
+    if pos == 'n':
         c_male = apply_contraction(f'le {ortho_ms}')
         fs_text = f'la {ortho_fs}'
         return f'<gr><i>ms. </i></gr> {span_wrapper(text=c_male, is_bold=True, genre='m')}; <gr><i>fs. </i></gr> {span_wrapper(text=fs_text, is_bold=True, genre='f')}'
@@ -1067,7 +1067,7 @@ def sp_bold(lemme, pos, ortho_s, ortho_p, genre=None) -> str:
     """
     :return: formatted string one singular and one plural
     """
-    if pos == 'nom':
+    if pos == 'n':
         plural_text = f'les {ortho_p}'
         if genre is None:
             raise Exception('Invalid arguments passed to sp_bold for where pos is nom')
@@ -1093,7 +1093,7 @@ def mpf_det_bold(lemme, pos, ortho_m, ortho_p, ortho_f) -> str:
     """
     :return: formatted string one masculine singular, one plural, and one feminine singular
     """
-    if pos == 'nom':
+    if pos == 'n':
         # format: male / plural/ feminine (exists exclusively for nom)
         c_male = apply_contraction(f'le {ortho_m}') # ms_text conjuction
         plural_text = f'les {ortho_p}'
@@ -1108,7 +1108,7 @@ def four_bold(lemme, pos, ortho_ms, ortho_mpl, ortho_fs, ortho_fpl) -> (str|None
     :return: formatted string one masculine singular, one masculine plural, one feminine singular, and one feminine plural
     """
     # format noun four
-    if pos == 'nom':
+    if pos == 'n':
         ms_text = f'le {ortho_ms}'
         mpl_text = f'les {ortho_mpl}'
         fs_text = f'la {ortho_fs}'
