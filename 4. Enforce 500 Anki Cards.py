@@ -81,7 +81,7 @@ def main():
         elif difference < 0:
             # append to df1 from df2
             difference = abs(difference)
-            df1 = df1.merge(df2.iloc[:difference], how='left')
+            df1 = pd.concat([df1, df2.iloc[:difference]])
 
             # remove from df2
             df2 = df2.drop(df2.index[:difference])
@@ -90,7 +90,7 @@ def main():
         # region save ODS documents
         if NUM_FILES == 1:
             # delete overflow if unneeded
-            if df_overflow.empty:
+            if df_overflow.empty and os.path.exists(overflow_path):
                 os.remove(overflow_path)
             else:
                 df_overflow.to_csv(overflow_path, index=False, encoding='utf-8', header=False)
@@ -101,8 +101,9 @@ def main():
             print(f'Wrote final .csv: {filename1}')
         elif NUM_FILES == 2 and df2.empty and df_overflow.empty:
             # delete empty overflow file
-            os.remove(overflow_path)
-            print(f'  Deleted empty file {overflow_filename}.')
+            if os.path.exists(overflow_path):
+                os.remove(overflow_path)
+                print(f'  Deleted empty file {overflow_filename}.')
 
             # delete empty next file
             os.remove(path2)
@@ -118,10 +119,11 @@ def main():
             # raise Exception - balance logic must be broken
             raise Exception(
                 "Wha' in tarnation? NUM_FILES==2 and df2.empty but df_overflow is not empty. Balance logic must be broken.")
-        elif NUM_FILES == 2 and df_overflow.empty:
+        elif NUM_FILES == 2 and len(df2) <= 500 and df_overflow.empty:
             # delete empty overflow file
-            os.remove(overflow_path)
-            print(f'Deleted empty file {overflow_filename}.')
+            if os.path.exists(overflow_path):
+                os.remove(overflow_path)
+                print(f'Deleted empty file {overflow_filename}.')
 
             # write df1
             df1.to_csv(path1, index=False, encoding='utf-8', header=False)
