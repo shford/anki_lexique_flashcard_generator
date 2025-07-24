@@ -105,7 +105,7 @@ def override_config_from_file() -> None:
             for key in config_globals_dict.keys():
                 # only modify if global exists
                 if key not in global_symbol_table:
-                    break
+                    continue
 
                 # ensure we're importing settings that make sense
                 imported_global_value = literal_eval(config_globals_dict[key])
