@@ -10,14 +10,13 @@ Note 2: The Lexique 3.83 excel is usually (not always) sorted such that singular
 
         Todo:
          - Finish implementing AWS Translate function and merging w/ DeepL (service won't active (_(- -)_) so I can't test the dang thing)
-         - Add column for easy filtering (i.e. 1_eng_fr, 500_fr_eng, ... 2500_eng_fr, etc...)
 """
 import os
 import re
 from ast import literal_eval
 from dataclasses import dataclass
 
-# import boto3 todo uncomment if I ever get AWS working
+# import boto3 # AWS library
 import deepl
 import numpy as np
 import pandas as pd
@@ -25,14 +24,16 @@ import pandas as pd
 
 # === Configuration variables ===
 USER_PATH = os.path.expanduser('~')
-INPUT_CSV = f'{USER_PATH}/Documents/flashcard_project_new/lexique_exported_files/Freq 1 - 500.csv'
+INPUT_CSV = f'{USER_PATH}/Documents/flashcard_project_new/lexique_exported_files/Freq 501 - 1000.csv'
 OUTPUT_DIR = f'{USER_PATH}/Documents/flashcard_project_new/anki_lexique_imports'
 OUTPUT_PREFIX = 'anki_deck_'
 CHUNK_SIZE = 500
 
-# convenient for when it comes to grouping cards into decks, you can set this to anything.
-# chunk_idx gets appended to this, you can use that for organizing subdecks via the 'Deck ID' field
-DECK_NAME = 'lexique_deck'
+# will attempt to parse translations (most likely exported Notes from Anki, strip HTML, '\t' delimeter).
+PARSE_CUSTOM_DECK = False # default: False
+
+# convenient for when it comes to grouping cards into decks; chunk_idx gets appended to this as a 'sub'
+DECK_NAME = 'lexique_deck_sub1'
 # === End Config ===
 
 # POS priority for sorting and filtering
@@ -76,22 +77,95 @@ class Row_Stats:
 
 
 def main():
-    formatting_exception_count = 0
+    # load pandas
+    df = pd.read_csv(INPUT_CSV, encoding='utf-8')
+
+    # read custom deck (if configured)
+    foreign_lemme_trans_pairs = {}
+    if PARSE_CUSTOM_DECK:
+        foreign_lemme_trans_pairs = parse_translations_from_exported_deck()
 
     # prep for DeepL translations
-    auth_key = read_deepl_creds()
-    deepl_client = deepl.DeepLClient(auth_key)
+    deepl_auth_key = read_deepl_creds()
+    deepl_client = deepl.DeepLClient(deepl_auth_key)
     deepl_source_language = 'FR'
     deepl_target_language = 'EN-US'
 
     # prep for AWS translations
     aws_access_key_id, aws_secret_access_key = read_aws_creds()
     # aws_client = boto3.client('translate', region_name='us-east-2', aws_access_key_id=aws_access_key_id, aws_secret_access_key=aws_secret_access_key)
+    aws_client = ''
     aws_src_lang = 'en'
     aws_tgt_lang = 'fr'
 
-    # load pandas
-    df = pd.read_csv(INPUT_CSV, encoding='utf-8')
+    # writes flashcards to file
+    create_flashcard_rows(df, deepl_client, deepl_source_language, deepl_target_language, aws_client, aws_src_lang, aws_tgt_lang, foreign_lemme_trans_pairs)
+
+    # close AWS client
+    # aws_client.close()
+
+    return
+
+
+def parse_translations_from_exported_deck() -> dict:
+    """
+    You can pretty much ignore this function. It parses the french deck that I studied
+     previously. I made a lot of translation edits/hints that I wanted to carry forward.
+
+     If you want to use it you'll probably have to rewrite from the ground up although honestly
+     it's probably easier than you think.
+    :return: returns dict of lemme/translation pairs.
+    """
+    fields = [
+        'Word',                     # this is the deck's lemme
+        'Word with article',
+        'Frequency Index',
+        'IPA',
+        'Noun declension',
+        'Basic meanings of word',   # this is the deck's english translation (example: 'adj. excessive')
+        'Example sentences',
+        'Example sentences without translation',
+        'Wiktionary entry',
+        'Word with declinations',
+        'Parisian French Audio (Voice 1)',
+        'Canadian French Audio (Voice 1)'
+    ]
+    field_separator = '\t'
+    starts_on_line_index = 2
+    exported_deck_path = 'resources/1. 5000 Most Common French Words (Canadian)__English to French.txt'
+
+    with open(exported_deck_path, 'r') as f:
+        lines = f.readlines()
+        data_lines = lines[starts_on_line_index:]
+
+        foreign_lemme_list = []
+        foreign_lemme_translation_lookup = {}
+        for data_line in data_lines:
+            field_data = data_line.split(field_separator)
+            foreign_lemme = field_data[0].strip().lower()
+
+            # skip potential duplicates - that's just asking for trouble
+            if foreign_lemme not in foreign_lemme_list:
+                # format translation
+                foreign_translation_field = field_data[5].strip()
+                sub1 = foreign_translation_field.replace('etc.', '(_+ _ +_/')   # substitute 'etc.'
+                sub2 = sub1.replace('...', '(_^ _ ^_/')    # substitute '...'
+                foreign_translation_s2 = sub2.split('.')[-1].strip().lower() # split on '.'
+                foreign_translation_s1 = foreign_translation_s2.replace('(_+ _ +_/', 'etc.') # sub 'etc.'
+                foreign_translation = foreign_translation_s1.replace('(_^ _ ^_/', '...')  # sub '...'
+
+                # append
+                foreign_lemme_list.append(foreign_lemme)
+                foreign_lemme_translation_lookup[foreign_lemme] = foreign_translation
+
+        return foreign_lemme_translation_lookup
+
+
+def create_flashcard_rows(df,
+                          deepl_client, deepl_src_lang, deepl_tgt_lang,
+                          aws_client, aws_src_lang, aws_tgt_lang,
+                          exported_translation_pairs):
+    formatting_exception_count = 0
 
     # calculate starting frequency index from filename
     freq_start = parse_start_frequency(INPUT_CSV)
@@ -111,9 +185,8 @@ def main():
             lemme_df = pd.DataFrame(lemme_to_rows[lemme])
             pos = lemme_df['cgram'].iloc[0]
 
-            # get DeepL English translation
-            deepl_translation = deepl_translate(lemme, pos, deepl_client, deepl_source_language, deepl_target_language)
-            # aws_translation = aws_translate(aws_client, lemme, aws_src_lang, aws_tgt_lang)
+            # assign 'English Translation'
+            translation = translate(lemme, pos, deepl_client, deepl_src_lang, deepl_tgt_lang, exported_translation_pairs)
 
             # format 'Noun Declension' field
             noun_decls = format_noun_declension(lemme, lemme_df, pos)
@@ -130,12 +203,10 @@ def main():
             pronunciation = get_pronunciation(lemme, lemme_df)
 
             # update rows
-            update_to_export_rows(lemme, pos, noun_decls, pronunciation, deepl_translation, chunk_idx, export_rows)
+            update_to_export_rows(lemme, pos, noun_decls, pronunciation, translation, chunk_idx, export_rows)
 
         # write sheet to be imported into Anki
         write_anki_csv(freq_start, chunk_idx, lemme_chunk, export_rows, formatting_exception_count)
-
-    # aws_client.close()
 
 
 def read_aws_creds():
@@ -202,6 +273,43 @@ def read_deepl_creds():
             exit(-1)
 
 
+def translate(lemme, pos, deepl_client, deepl_src_lang, deepl_tgt_lang, exported_translation_pairs) -> (str|None):
+    """
+    :return: returns target language translation(s) as str, or None if no translations found.
+    """
+    # prefer local translation - note: this is skipped unless flag is toggled on
+    if lemme in exported_translation_pairs.keys():
+        return exported_translation_pairs[lemme]
+
+    # try DeepL & AWS
+    deepl_translation = deepl_translate(lemme, pos, deepl_client, deepl_src_lang, deepl_tgt_lang)
+    aws_translation = ''
+    # aws_translation = aws_translate(aws_client, lemme, aws_src_lang, aws_tgt_lang)
+
+    # handle inconsistent prescence of 'to ' prior to verbs
+    if pos == 'ver':
+        if len(deepl_translation) > 0:
+            if 'to ' not in deepl_translation:
+                # prepend 'to '
+                deepl_translation = f'to {deepl_translation}'
+        if len(aws_translation) > 0:
+            if 'to ' not in aws_translation:
+                # prepend 'to '
+                aws_translation = f'to {aws_translation}'
+
+    if len(deepl_translation) == 0 and len(aws_translation) == 0:
+        return None
+    elif len(deepl_translation) == 0:
+        return aws_translation
+    elif len(aws_translation) == 0:
+        return deepl_translation
+    else:
+        if deepl_translation == aws_translation:
+            return deepl_translation
+        else:
+            return f'{deepl_translation}; {aws_translation}'
+
+
 def deepl_translate(lemme, pos, deepl_client, source_lang, target_language) -> str:
     """
     :return: DeepL translation
@@ -215,9 +323,6 @@ def deepl_translate(lemme, pos, deepl_client, source_lang, target_language) -> s
         finally:
             print('')
             print('DeepL API authorization failure. Ensure correct key from DeepL website (hint: find under "Account->API Keys and Limits") is pasted in resources/deepl_credentials.txt')
-    if pos == 'ver' and 'to ' not in deepl_translation:
-        # prepend 'to '
-        deepl_translation = f'to {deepl_translation}'
 
     return deepl_translation.lower()
 
@@ -1041,7 +1146,7 @@ def get_pronunciation(lemme, lemme_df):
 
 
 def update_to_export_rows(lemme, pos, noun_decls, pronunciation, translation, deck_id, export_rows):
-    if noun_decls is not False:
+    if noun_decls is not False and translation is not None:
         if not isinstance(noun_decls, list):
             noun_decls = [noun_decls]
 
@@ -1078,6 +1183,7 @@ def write_anki_csv(freq_start, chunk_idx, lemme_chunk, export_rows, formatting_e
 
     print(f'Exported {len(lemme_chunk)} lemmes to {out_file}')
     print(f'Formatting exceptions: {formatting_exception_count}')
+    print('')
 
 
 if __name__ == "__main__":
