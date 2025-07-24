@@ -1,20 +1,15 @@
 """
 @Instructions:
-  1. Export:
-    In LibreOffice, 'Save As' Lexique383.xlsb to Lexique383.csv (comma field separated, UTF-8) in desired directory.
-  2. Set paths:
-    Fill in desired input and output file paths.
-  3. Adjust memory:
-    a. Add memory to IDE. I gave my IDE 2 GiB. You could probably get away with less.
-    b. If having issues maybe try: read_csv(..., low_memory=false) -> read_csv(..., low_memory=true)
+  See Github README.
 
-@Purpose: Filter lexique lemmes.
+@Purpose: Filter lexique lemmes (note: additional correction done dynamically in Step 3).
 
 @Note: This is going to be slow-ish. On my machine it took ~1.8 minutes to run.
         But it only needs to run once.
 """
 import gc
 import os
+import time
 import warnings
 
 import pandas as pd
@@ -27,9 +22,17 @@ output_file_path = f'{user_path}/Documents/flashcard_project_new/Lexique383 - Fi
 # ========================
 
 # Globals
-desired_POS = ['adj', 'ver', 'adv', 'ono', 'pre', 'con', 'nom', 'adj:ind']
+desired_POS = ['adj', 'ver', 'adv', 'ono', 'prep', 'con', 'n', 'adj:ind']
+
 
 def main():
+    t1 = time.time()
+    clean_lexique()
+    t2 = time.time()
+    print(f'Cleaned lexique in {t2-t1} seconds.')
+
+
+def clean_lexique():
     # read in our french dictionary
     word_list = parse_dela_dict()
 
@@ -105,6 +108,10 @@ def main():
 
     # rename "cgram" column to .lower()
     df['cgram'] = df['cgram'].str.lower()
+
+    # rename some lexique POS fields to preferred
+    df['cgram'] = df['cgram'].replace('nom', 'n')
+    df['cgram'] = df['cgram'].replace('pre', 'prep')
 
     # filter rows for cgram equals desired_POS
     df = df[df['cgram'].isin(desired_POS)]
