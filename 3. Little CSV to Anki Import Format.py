@@ -32,7 +32,7 @@ CHUNK_SIZE = 500
 
 # convenient for when it comes to grouping cards into decks, you can set this to anything.
 # chunk_idx gets appended to this, you can use that for organizing subdecks via the 'Deck ID' field
-STARTING_DECK_NAME = 'lexique_deck'
+DECK_NAME = 'lexique_deck'
 # === End Config ===
 
 # POS priority for sorting and filtering
@@ -1057,7 +1057,7 @@ def update_to_export_rows(lemme, pos, noun_decls, pronunciation, translation, de
                 'Sound': '',
                 'Translation': translation,
                 'POS': pos,
-                'Deck Id': f'{STARTING_DECK_NAME}_{deck_id}',
+                'Deck Id': f'{DECK_NAME}_{deck_id}',
                 'Tags': '',
             })
 
