@@ -30,7 +30,7 @@ OUTPUT_PREFIX = 'anki_deck_'
 CHUNK_SIZE = 500
 
 # will attempt to parse translations (most likely exported Notes from Anki, strip HTML, '\t' delimeter).
-PARSE_CUSTOM_DECK = False # default: False
+PARSE_CUSTOM_DECK = True # default: False
 
 # convenient for when it comes to grouping cards into decks; chunk_idx gets appended to this as a 'sub'
 DECK_NAME = 'lexique_deck_sub1'
@@ -38,6 +38,14 @@ DECK_NAME = 'lexique_deck_sub1'
 
 # POS priority for sorting and filtering
 POS_PRIORITY = ['adj', 'adv', 'pre', 'ver', 'ono', 'nom', 'con']
+
+
+@dataclass
+class Card:
+    def __init__(self, lemme):
+        self.lemme = lemme
+        self.sing = ''
+        self.plural = ''
 
 
 @dataclass
@@ -76,6 +84,7 @@ class Row_Stats:
         self.num_na_na = len(self.rows_na_na)
 
 
+formatting_exception_count = 0
 def main():
     # load pandas
     df = pd.read_csv(INPUT_CSV, encoding='utf-8')
@@ -146,13 +155,16 @@ def parse_translations_from_exported_deck() -> dict:
 
             # skip potential duplicates - that's just asking for trouble
             if foreign_lemme not in foreign_lemme_list:
-                # format translation
+                # format translation (substitude to prevent unwanted splitting on delimeter)
                 foreign_translation_field = field_data[5].strip()
                 sub1 = foreign_translation_field.replace('etc.', '(_+ _ +_/')   # substitute 'etc.'
                 sub2 = sub1.replace('...', '(_^ _ ^_/')    # substitute '...'
                 foreign_translation_s2 = sub2.split('.')[-1].strip().lower() # split on '.'
                 foreign_translation_s1 = foreign_translation_s2.replace('(_+ _ +_/', 'etc.') # sub 'etc.'
                 foreign_translation = foreign_translation_s1.replace('(_^ _ ^_/', '...')  # sub '...'
+
+                # when I started I would do hints as english, let's correct that inconsistency
+                foreign_translation = foreign_translation.replace('(not ', '(pas ')
 
                 # append
                 foreign_lemme_list.append(foreign_lemme)
@@ -164,9 +176,7 @@ def parse_translations_from_exported_deck() -> dict:
 def create_flashcard_rows(df,
                           deepl_client, deepl_src_lang, deepl_tgt_lang,
                           aws_client, aws_src_lang, aws_tgt_lang,
-                          exported_translation_pairs):
-    formatting_exception_count = 0
-
+                          translation_pairs):
     # calculate starting frequency index from filename
     freq_start = parse_start_frequency(INPUT_CSV)
 
@@ -183,30 +193,26 @@ def create_flashcard_rows(df,
 
         for lemme in lemme_chunk:
             lemme_df = pd.DataFrame(lemme_to_rows[lemme])
+            card = Card(lemme)
             pos = lemme_df['cgram'].iloc[0]
-
-            # assign 'English Translation'
-            translation = translate(lemme, pos, deepl_client, deepl_src_lang, deepl_tgt_lang, exported_translation_pairs)
-
-            # format 'Noun Declension' field
-            noun_decls = format_noun_declension(lemme, lemme_df, pos)
-
-            # if formatting fails, print all rows for this lemme and POS with nombre and ortho for debug
-            if noun_decls is None:
-                formatting_exception_count += 1
-                print_formatting_exceptions(lemme, pos, lemme_df)
-
-                # just treat lemme as singular adj - e.g. give up and settle for bolding the lemme
-                noun_decls = singular_bold(lemme, 'adj')
 
             # copy orthosyll column to pronunciation column - use matching lemme orthosyll if available
             pronunciation = get_pronunciation(lemme, lemme_df)
 
+            # format 'Noun Declension' field
+            noun_decl = format_noun_declension(lemme, lemme_df, pos, pronunciation, chunk_idx, export_rows, card,
+                                               deepl_client, deepl_src_lang, deepl_tgt_lang, translation_pairs)
+            if noun_decl is None:
+                continue # skip this so-called 'lemme' as it's a duplicate entry
+
+            # assign 'English Translation'
+            translation = translate(lemme, pos, deepl_client, deepl_src_lang, deepl_tgt_lang, translation_pairs)
+
             # update rows
-            update_to_export_rows(lemme, pos, noun_decls, pronunciation, translation, chunk_idx, export_rows)
+            update_export_rows(lemme, pos, noun_decl, pronunciation, translation, chunk_idx, export_rows)
 
         # write sheet to be imported into Anki
-        write_anki_csv(freq_start, chunk_idx, lemme_chunk, export_rows, formatting_exception_count)
+        write_anki_csv(freq_start, chunk_idx, lemme_chunk, export_rows)
 
 
 def read_aws_creds():
@@ -384,38 +390,74 @@ def parse_start_frequency(filename) -> int:
     return int(match.group(1))
 
 
-def format_noun_declension(lemme, rows, pos):
+def format_noun_declension(lemme, rows, pos, pronunciation, chunk_idx, export_rows, card,
+                           deepl_client, deepl_src_lang, deepl_tgt_lang, translation_pairs):
     """
-    :return: correct formatting rule.
+    :return: return formatted html as str or return None to continue to next lemme.
     """
+    global formatting_exception_count
+
     # we'll just pre-compute this junk. it's a little inefficient but it reduces code complexity
     row_stats = Row_Stats(rows=rows)
 
     # check for hard-coded exceptions first
-    hard_coded_format = handle_hard_coded_formats(rows, lemme)
-    if hard_coded_format is not None or hard_coded_format is False:
-        return hard_coded_format
+    noun_decl = handle_hard_coded_formats(rows, lemme)
+    if noun_decl is not None:
+        if noun_decl is False:
+            return None
+        return noun_decl
 
     if pos in {'ver', 'adv', 'pre', 'con', 'ono'}:
-        return singular_bold(lemme, pos)
+        noun_decl = singular_bold(lemme, pos)
     else:
         num_rows = len(rows)
         try:
             # if 1 row OR genre empty and all ortho's are equal then treat as single
             if num_rows == 1 or (all(x == lemme for x in rows['ortho']) and rows['genre'].isna().all()):
-                return row1_func(rows, row_stats, lemme, pos)
+                noun_decl = row1_func(rows, row_stats, lemme, pos)
             elif num_rows == 2:
-                return row2_func(rows, row_stats, lemme, pos)
+                noun_decl = row2_func(rows, row_stats, lemme, pos, card)
             elif num_rows == 3:
-                return row3_func(rows, row_stats, lemme, pos)
+                noun_decl = row3_func(rows, row_stats, lemme, pos)
             elif num_rows == 4:
-                return row4_func(rows, row_stats, lemme, pos)
+                noun_decl = row4_func(rows, row_stats, lemme, pos)
             elif num_rows == 5:
-                return row5_func(rows, row_stats, lemme, pos)
+                noun_decl = row5_func(rows, row_stats, lemme, pos)
             else:
-                return None
+                noun_decl = None
         except ValueError or TypeError:
-            return None
+            noun_decl = None
+
+    # if formatting fails, print info. so we can try to fix the lexique
+    if noun_decl is None:
+        formatting_exception_count += 1
+        print_formatting_exceptions(lemme, pos, rows)
+
+        # just treat lemme as singular adj - e.g. give up and settle for bolding the lemme
+        noun_decl = bold_wrapper(lemme)
+    elif isinstance(noun_decl, list):  # note: can only occur from pos=='nom'
+        # assign 'English Translation'
+        male_translation = translate(f'le {lemme}', pos, deepl_client, deepl_src_lang, deepl_tgt_lang,
+                                     translation_pairs).replace('the ', '')
+        fem_translation = translate(f'la {lemme}', pos, deepl_client, deepl_src_lang, deepl_tgt_lang,
+                                    translation_pairs).replace('the ', '')
+
+        if male_translation != fem_translation:
+            m_noun_decl = noun_decl[0]
+            f_noun_decl = noun_decl[1]
+            update_export_rows(lemme, pos, m_noun_decl, pronunciation, male_translation, chunk_idx, export_rows)
+            update_export_rows(lemme, pos, f_noun_decl, pronunciation, fem_translation, chunk_idx, export_rows)
+            return None  # move to next lemme
+        else:
+            # correct false positive homo, homo, same lemme diff meaning row_2() conditional -> mpf (probably)
+            # _ s
+            # _ p
+            noun_decl = mpf_det_bold(lemme, 'nom', card.sing, card.plural, card.sing)
+            translation = male_translation.replace('', '')
+            update_export_rows(lemme, pos, noun_decl, pronunciation, translation, chunk_idx, export_rows)
+            return None # move to next lemme
+
+    return noun_decl
 
 
 def row1_func(rows, rs, lemme, pos):
@@ -448,7 +490,7 @@ def row1_func(rows, rs, lemme, pos):
             return sp_bold(lemme, pos, ortho, ortho, genre)
 
 
-def row2_func(rows, rs, lemme, pos):
+def row2_func(rows, rs, lemme, pos, card):
     """
     :return: formatting per rules
     """
@@ -512,6 +554,8 @@ def row2_func(rows, rs, lemme, pos):
             """
             ortho_s = rs.rows_s.iloc[0]['ortho']
             ortho_p = rs.rows_p.iloc[0]['ortho']
+            card.sing = ortho_s
+            card.plural = ortho_p
             return [sp_bold(lemme, pos, ortho_s, ortho_p, 'm'),
                     sp_bold(lemme, pos, ortho_s, ortho_p, 'f')]
 
@@ -841,10 +885,10 @@ def row4_func(rows, rs, lemme, pos):
 
         if len(rows) == 4:
             # Expect ms, mpl, fs, fpl
-            ms = find_row(rows, 'm', 's')
-            mpl = find_row(rows, 'm', 'p')
-            fs = find_row(rows, 'f', 's')
-            fpl = find_row(rows, 'f', 'p')
+            ms = rs.rows_m_s
+            mpl = rs.rows_m_p
+            fs = rs.rows_f_s
+            fpl = rs.rows_f_p
 
             if rs.num_na_s == 1 and rs.num_na_p == 1 and rs.num_f_s == 1 and rs.num_f_p == 1:
                 # works for 'adj' and 'nom' - assumes male is more likely than two archaics
@@ -858,25 +902,25 @@ def row4_func(rows, rs, lemme, pos):
                 return four_bold(lemme, pos, ortho_ms, ortho_mp,
                                  rs.rows_f_s.iloc[0]['ortho'], rs.rows_f_p.iloc[0]['ortho'])
 
-            if ms is not None and mpl is not None and fs is not None and fpl is not None:
+            if not ms.empty and not mpl.empty and fs.empty and fpl.empty:
                 # nothing missing
-                return four_bold(lemme, pos, ms['ortho'], mpl['ortho'], fs['ortho'], mpl['ortho'])
+                return four_bold(lemme, pos, ms.iloc[0]['ortho'], mpl.iloc[0]['ortho'], fs.iloc[0]['ortho'], mpl.iloc[0]['ortho'])
             else:
                 # one row missing
-                if (ms is not None and mpl is not None and fs is not None) or (ms is not None and mpl is not None and fpl is not None) or (ms is not None and fs is not None and fpl is not None) or (mpl is not None and fs is not None and fpl is not None):
+                if (not ms.empty and not mpl.empty and not fs.empty) or (not ms.empty and not mpl.empty and not fpl.empty) or (not ms.empty and not fs.empty and not fpl.empty) or (not mpl.empty and not fs.empty and not fpl.empty):
                     # assign ms|mpl|fs|fpl to row with missing genre/nombre malformed - process of elimination
                     malformed_row = rows[rows['genre'].isna() | rows['nombre'].isna()]
-                    if ms is not None and mpl is not None and fs is not None:
+                    if not ms.empty and not mpl.empty and not fs.empty:
                         fpl = malformed_row
-                    elif ms is not None and mpl is not None and fpl is not None:
+                    elif not ms.empty and not mpl.empty and not fpl.empty:
                         fs = malformed_row
-                    elif ms is not None and fs is not None and fpl is not None:
+                    elif not ms.empty and not fs.empty and not fpl.empty:
                         mpl = malformed_row
                     else:
                         ms = malformed_row
 
                     # return corrected value
-                    return four_bold(lemme, pos, ms['ortho'], mpl['ortho'], fs['ortho'], mpl['ortho'])
+                    return four_bold(lemme, pos, ms.iloc[0]['ortho'], mpl.iloc[0]['ortho'], fs.iloc[0]['ortho'], mpl.iloc[0]['ortho'])
                 # todo could fix infer more fixes, for example if ms and fpl were both missing but there were rows with m_ and _pl
 
     return None
@@ -1145,29 +1189,25 @@ def get_pronunciation(lemme, lemme_df):
         return lemme_df['orthosyll'].iloc[0]
 
 
-def update_to_export_rows(lemme, pos, noun_decls, pronunciation, translation, deck_id, export_rows):
-    if noun_decls is not False and translation is not None:
-        if not isinstance(noun_decls, list):
-            noun_decls = [noun_decls]
+def update_export_rows(lemme, pos, noun_decl, pronunciation, translation, deck_id, export_rows):
+    if translation is not None:
+        # apply contraction rule to noun_decl
+        noun_decl = apply_contraction(noun_decl)
 
-        for noun_decl in noun_decls:
-            # apply contraction rule to noun_decl
-            noun_decl = apply_contraction(noun_decl)
-
-            # append
-            export_rows.append({
-                'Lemme': lemme,
-                'Noun Declension': noun_decl,
-                'Pronunciation': pronunciation,
-                'Sound': '',
-                'Translation': translation,
-                'POS': pos,
-                'Deck Id': f'{DECK_NAME}_{deck_id}',
-                'Tags': '',
-            })
+        # append
+        export_rows.append({
+            'Lemme': lemme,
+            'Noun Declension': noun_decl,
+            'Pronunciation': pronunciation,
+            'Sound': '',
+            'Translation': translation,
+            'POS': pos,
+            'Deck Id': f'{DECK_NAME}_{deck_id}',
+            'Tags': '',
+        })
 
 
-def write_anki_csv(freq_start, chunk_idx, lemme_chunk, export_rows, formatting_exception_count):
+def write_anki_csv(freq_start, chunk_idx, lemme_chunk, export_rows):
     # output file name
     start_idx = freq_start + chunk_idx
     end_idx = start_idx + len(lemme_chunk) - 1
