@@ -9,7 +9,7 @@ Note 2: The Lexique 3.83 excel is usually (not always) sorted such that singular
         depending on what's missing, this code gambles that the pattern will hold true.
 
         Todo:
-         - Replace <b>,<red>,<blue> w/ <span class="masc" | "fem" (ignore bold)
+         - Finish implementing AWS Translate function and merging w/ DeepL (service won't active (_(- -)_) so I can't test the dang thing)
          - Add column for easy filtering (i.e. 1_eng_fr, 500_fr_eng, ... 2500_eng_fr, etc...)
 """
 import os
@@ -17,7 +17,7 @@ import re
 from ast import literal_eval
 from dataclasses import dataclass
 
-import boto3
+# import boto3 todo uncomment if I ever get AWS working
 import deepl
 import numpy as np
 import pandas as pd
@@ -29,15 +29,14 @@ INPUT_CSV = f'{USER_PATH}/Documents/flashcard_project_new/lexique_exported_files
 OUTPUT_DIR = f'{USER_PATH}/Documents/flashcard_project_new/anki_lexique_imports'
 OUTPUT_PREFIX = 'anki_deck_'
 CHUNK_SIZE = 500
+
+# convenient for when it comes to grouping cards into decks, you can set this to anything.
+# chunk_idx gets appended to this, you can use that for organizing subdecks via the 'Deck ID' field
+STARTING_DECK_NAME = 'lexique_deck'
 # === End Config ===
 
 # POS priority for sorting and filtering
 POS_PRIORITY = ['adj', 'adv', 'pre', 'ver', 'ono', 'nom', 'con']
-
-
-@dataclass
-class Card:
-    a = 1
 
 
 @dataclass
@@ -131,7 +130,7 @@ def main():
             pronunciation = get_pronunciation(lemme, lemme_df)
 
             # update rows
-            update_to_export_rows(lemme, pos, noun_decls, pronunciation, deepl_translation, export_rows)
+            update_to_export_rows(lemme, pos, noun_decls, pronunciation, deepl_translation, chunk_idx, export_rows)
 
         # write sheet to be imported into Anki
         write_anki_csv(freq_start, chunk_idx, lemme_chunk, export_rows, formatting_exception_count)
@@ -207,7 +206,15 @@ def deepl_translate(lemme, pos, deepl_client, source_lang, target_language) -> s
     """
     :return: DeepL translation
     """
-    deepl_translation = deepl_client.translate_text(lemme, source_lang=source_lang, target_lang=target_language).text
+    try:
+        deepl_translation = deepl_client.translate_text(lemme, source_lang=source_lang, target_lang=target_language).text
+    except deepl.exceptions.AuthorizationException as e:
+        print('')
+        try:
+            raise Exception(e)
+        finally:
+            print('')
+            print('DeepL API authorization failure. Ensure correct key from DeepL website (hint: find under "Account->API Keys and Limits") is pasted in resources/deepl_credentials.txt')
     if pos == 'ver' and 'to ' not in deepl_translation:
         # prepend 'to '
         deepl_translation = f'to {deepl_translation}'
@@ -215,7 +222,7 @@ def deepl_translate(lemme, pos, deepl_client, source_lang, target_language) -> s
     return deepl_translation.lower()
 
 
-def aws_translate(client, text, src_lang, tgt_lang):
+def TODO_NOT_FINISHED_aws_translate(client, text, src_lang, tgt_lang):
     """
     :return: AWS translation
     other translate calls of note:
@@ -238,7 +245,7 @@ def aws_translate(client, text, src_lang, tgt_lang):
     )
 
     return response.get('TranslatedText').lower() # from https://docs.aws.amazon.com/translate/latest/dg/get-started-sdk.html
-    return response['TranslatedText'].lower() # todo
+    # return response['TranslatedText'].lower() # is this the right return format, hard to know w/out an API key to test...
 
 
 def group_rows_by_lemme(df) -> (list, dict):
@@ -799,11 +806,11 @@ def row5_func(rows, rs, lemme, pos):
 
 def handle_hard_coded_formats(rows, lemme):
     """
-    :return: pretty self explanatory
+    :return: return formatted str for formatting exceptions not easily filtered/prior or corrected dynamically
     note: returning false prevents duplicates from getting exported.
-            DO NOT CHANGE False TO None.
+            DO NOT CHANGE False TO None - it's used to prevent appending flashcards to export_rows.
     """
-    # exceptions because of duplicate lemme entries in lexique that should be consolidated into one card
+    # region exceptions because of duplicate lemme entries in lexique that should be consolidated into one card
     HARD_CODED_ADJ_4_ROWS = {
         'tout', 'toute', 'tous', 'toutes',
         'aucun', 'aucune', 'aucuns', 'aucunes',
@@ -818,20 +825,43 @@ def handle_hard_coded_formats(rows, lemme):
             return sp_bold('quelque', 'adj', 'quelque', 'quelques')
         else:
             return False
+    # endregion
 
-    # exception because singular ortho is missing from lexique
+    # region exception because singular ortho is missing from lexique
     if lemme == 'fois':
         return sp_bold(lemme, 'nom', lemme, lemme, 'f')
+    # endregion
 
-    # exceptions for unique/archaic/rare poetic spellings (that can't be corrected easily w/ rules)
+    # region exceptions for unique/archaic/rare poetic spellings (that can't be corrected easily w/ rules)
     if lemme == 'oeil':
         return sp_bold(lemme, 'nom', lemme, 'yeux', 'm')
     elif lemme == 'lieu':
         return sp_bold(lemme, 'nom', lemme, 'lieux', 'm')
     elif lemme == 'aïeul':
-        return '<b>aïeul</b> [<gr><i>ms. </i></gr> <blue>le aïeul</blue>; <gr><i>mpl. (refers to male members of a genealogical tree - literal grandfathers/forefathers)</i></gr> <blue>les aïeuls</blue>; <gr><i>mpl. (refers to collective ancestors regardless of gender even if not from a single literal bloodline)</i></gr> <blue>les aïeux</blue>; <gr><i>fs. </i></gr> <red>la aïeule</red>; <gr><i>fpl. </i></gr> archaic]'
+        ms_text = 'le aïeul'
+        literal_mpl_text = 'les aïeuls'
+        figurative_mpl_text = 'les aïeux'
+        fs_text = 'la aïeule'
+        return f'{bold_wrapper(lemme)} [<gr><i>ms. </i></gr> {span_wrapper(text=ms_text, is_bold=False, genre='m')}; <gr><i>mpl. (refers to male members of a genealogical tree - literal grandfathers/forefathers)</i></gr> {span_wrapper(text=literal_mpl_text, is_bold=False, genre='m')}; <gr><i>mpl. (refers to collective ancestors regardless of gender even if not from a single literal bloodline)</i></gr> {span_wrapper(text=figurative_mpl_text, is_bold=False, genre='m')}; <gr><i>fs. </i></gr> {span_wrapper(text=fs_text, is_bold=False, genre='f')}; <gr><i>fpl. </i></gr> <i>ommitted - archaic</i>]'
+    # endregion
 
     return None
+
+
+def span_wrapper(text, is_bold, genre):
+    if is_bold:
+        text = bold_wrapper(text)
+
+    if genre == 'm':
+        return f'<span class="masc">{text}</span>'
+    elif genre == 'f':
+        return f'<span class="fem">{text}</span>'
+    else:
+        raise Exception('Invalid genre, must be "m" or "f".')
+
+
+def bold_wrapper(text):
+    return f'<b>{text}</b>'
 
 
 def singular_bold(ortho_s, pos, genre=None) -> str:
@@ -843,29 +873,31 @@ def singular_bold(ortho_s, pos, genre=None) -> str:
             raise Exception('Invalid arguments passed to singular_bold() for where pos is nom')
         elif genre == 'm':
             c_male = apply_contraction(f'le {ortho_s}')
-            return f'<b><blue>{c_male}</blue></b>'
+            return f'{span_wrapper(text=c_male, is_bold=True, genre='m')}'
         elif genre == 'f':
             c_fem = apply_contraction(f'la {ortho_s}')
-            return f'<b><red>{c_fem}</red></b>'
+            return f'{span_wrapper(text=c_fem, is_bold=True, genre='f')}'
         else:
             raise Exception('Invalid genre passed to to det function: singular_bold()')
     else:
-        return f'<b>{ortho_s}</b>'
+        return f'{bold_wrapper(ortho_s)}'
 
 
-def plural_bold(plural, pos, genre=None) -> str:
+def plural_bold(plural_ortho, pos, genre=None) -> str:
     """
     :return: formatted string for one plural
     """
+    plural_text = f'les {plural_ortho}'
     if pos == 'nom':
         if genre == 'm':
-            return f"<b><blue>les {plural}</blue></b>"
+            return f'{span_wrapper(text=plural_text, is_bold=True, genre='m')}'
         elif genre == 'f':
-            return f"<b><red>les {plural}</red></b>"
+            return f'{span_wrapper(text=plural_text, is_bold=True, genre='f')}'
         else:
-            return f"<b>les {plural}</b>"
+            # this might should be an exception... meh, I'll allow it
+            return f'{bold_wrapper(text=plural_text)}'
     else:
-        return f'<b>{plural}</b>'
+        return f'{bold_wrapper(text=plural_ortho)}'
 
 
 def ms_fs_bold(lemme, pos, ortho_ms, ortho_fs) -> str:
@@ -875,10 +907,11 @@ def ms_fs_bold(lemme, pos, ortho_ms, ortho_fs) -> str:
     # shout [grand-papa, grand-mama]
     if pos == 'nom':
         c_male = apply_contraction(f'le {ortho_ms}')
-        return f'<gr><i>ms. </i></gr> <blue><b>{c_male}</b></blue>; <gr><i>fs. </i></gr> <red><b>la {ortho_fs}</red></b>'
+        fs_text = f'la {ortho_fs}'
+        return f'<gr><i>ms. </i></gr> {span_wrapper(text=c_male, is_bold=True, genre='m')}; <gr><i>fs. </i></gr> {span_wrapper(text=fs_text, is_bold=True, genre='f')}'
     else:
-        return f'<gr><i>ms. </i></gr> <blue><b>{ortho_ms}</b></blue>; <gr><i>fs. </i></gr> <red><b>{ortho_fs}</red></b>'
-        # raise Exception(f'Invalid pos passed to ms_fs_bold() for {lemme}')
+        return f'<gr><i>ms. </i></gr> {span_wrapper(text=ortho_ms, is_bold=True, genre='m')}; <gr><i>fs. </i></gr> {span_wrapper(text=ortho_fs, is_bold=True, genre='f')}'
+        # raise Exception(f'Invalid pos passed to ms_fs_bold() for {lemme}') ??
 
 
 def sp_bold(lemme, pos, ortho_s, ortho_p, genre=None) -> str:
@@ -886,24 +919,25 @@ def sp_bold(lemme, pos, ortho_s, ortho_p, genre=None) -> str:
     :return: formatted string one singular and one plural
     """
     if pos == 'nom':
+        plural_text = f'les {ortho_p}'
         if genre is None:
             raise Exception('Invalid arguments passed to sp_bold for where pos is nom')
         elif genre == 'm':
             c_male = apply_contraction(f'le {ortho_s}')
-            return f'<b><blue>{c_male}</blue></b> [<gr><i>pl. </i></gr><blue>les {ortho_p}</blue>]'
+            return f'{span_wrapper(text=c_male, is_bold=True, genre='m')} [<gr><i>pl. </i></gr>{span_wrapper(text=plural_text, is_bold=False, genre='m')}]'
         elif genre == 'f':
             c_fem = apply_contraction(f'la {ortho_s}')
-            return f'<b><red>{c_fem}</red></b> [<gr><i>pl. </i></gr><red>les {ortho_p}</red>]'
+            return f'{span_wrapper(text=c_fem, is_bold=True, genre='f')} [<gr><i>pl. </i></gr>{span_wrapper(text=plural_text, is_bold=False, genre='f')}]'
         elif genre == 'ms_fp':
             c_male = apply_contraction(f'le {ortho_s}')
-            return f'<b><blue>{c_male}</blue></b> [<gr><i>pl. </i></gr><red>les {ortho_p}</red>]'
+            return f'{span_wrapper(text=c_male, is_bold=True, genre='m')} [<gr><i>pl. </i></gr>{span_wrapper(text=plural_text, is_bold=False, genre='f')}]'
         elif genre == 'fs_mp':
             c_fem = apply_contraction(f'la {ortho_s}')
-            return f"<b><red>{c_fem}</red></b> [<gr><i>pl. </i></gr><blue>les {ortho_p}</blue>]"
+            return f"{span_wrapper(text=c_fem, is_bold=True, genre='f')} [<gr><i>pl. </i></gr>{span_wrapper(text=plural_text, is_bold=False, genre='m')}]"
         else:
             raise Exception('Invalid genre passed to sp_bold() where pos is nom')
     else:
-        return f'<b>{lemme}</b> [<gr><i>pl. </i></gr>{ortho_p}]'
+        return f'{bold_wrapper(text=lemme)} [<gr><i>pl. </i></gr>{ortho_p}]'
 
 
 def mpf_det_bold(lemme, pos, ortho_m, ortho_p, ortho_f) -> str:
@@ -912,10 +946,12 @@ def mpf_det_bold(lemme, pos, ortho_m, ortho_p, ortho_f) -> str:
     """
     if pos == 'nom':
         # format: male / plural/ feminine (exists exclusively for nom)
-        c_male = apply_contraction(f'le {ortho_m}')
-        return f"<b><blue>{c_male}</blue></b> [<gr><i>pl. </i></gr><blue>les {ortho_p}</blue>; <gr><i>f. </i></gr><red>la {ortho_f}</red>]"
+        c_male = apply_contraction(f'le {ortho_m}') # ms_text conjuction
+        plural_text = f'les {ortho_p}'
+        fs_text = f'la {ortho_f}'
+        return f'{span_wrapper(text=c_male, is_bold=True, genre='m')} [<gr><i>pl. </i></gr>{span_wrapper(text=plural_text, is_bold=False, genre='m')}; <gr><i>f. </i></gr>{span_wrapper(text=fs_text, is_bold=False, genre='f')}]'
     else:
-        return f"<b>{lemme}</b> [<gr><i>m. </i></gr><blue>{ortho_m}</blue>; <gr><i>pl. </i></gr><blue>{ortho_p}</blue>; <gr><i>f. </i></gr><red>{ortho_f}</red>]"
+        return f'{bold_wrapper(text=lemme)} [<gr><i>m. </i></gr>{span_wrapper(text=ortho_m, is_bold=False, genre='m')}; <gr><i>pl. </i></gr>{span_wrapper(text=ortho_p, is_bold=False, genre='m')}; <gr><i>f. </i></gr>{span_wrapper(text=ortho_f, is_bold=False, genre='f')}]'
 
 
 def four_bold(lemme, pos, ortho_ms, ortho_mpl, ortho_fs, ortho_fpl) -> (str|None):
@@ -924,21 +960,25 @@ def four_bold(lemme, pos, ortho_ms, ortho_mpl, ortho_fs, ortho_fpl) -> (str|None
     """
     # format noun four
     if pos == 'nom':
+        ms_text = f'le {ortho_ms}'
+        mpl_text = f'les {ortho_mpl}'
+        fs_text = f'la {ortho_fs}'
+        fpl_text = f'les {ortho_fpl}'
         return (
-            f"<b>{lemme}</b> ["
-            f"<gr><i>ms. </i></gr> <blue>le {ortho_ms}</blue>; "
-            f"<gr><i>mpl. </i></gr> <blue>les {ortho_mpl}</blue>; "
-            f"<gr><i>fs. </i></gr> <red>la {ortho_fs}</red>; "
-            f"<gr><i>fpl. </i></gr> <red>les {ortho_fpl}</red>"
-            "]"
+            f'{bold_wrapper(text=lemme)} ['
+            f'<gr><i>ms. </i></gr> {span_wrapper(text=ms_text, is_bold=False, genre='m')}; '
+            f'<gr><i>mpl. </i></gr> {span_wrapper(text=mpl_text, is_bold=False, genre='m')}; '
+            f'<gr><i>fs. </i></gr> {span_wrapper(text=fs_text, is_bold=False, genre='f')}; '
+            f'<gr><i>fpl. </i></gr> {span_wrapper(text=fpl_text, is_bold=False, genre='f')}'
+            ']'
         )
     elif pos == 'adj':
         return (
-            f"<b>{lemme}</b> "
-            f"[<gr><i>ms. </i></gr><blue>{ortho_ms}</blue>; "
-            f"<gr><i>mpl. </i></gr><blue>{ortho_mpl}</blue>; "
-            f"<gr><i>fs. </i></gr><red>{ortho_fs}</red>; "
-            f"<gr><i>fpl. </i></gr><red>{ortho_fpl}</red>]"
+            f'{bold_wrapper(text=lemme)} '
+            f'[<gr><i>ms. </i></gr>{span_wrapper(text=ortho_ms, is_bold=False, genre='m')}; '
+            f'<gr><i>mpl. </i></gr>{span_wrapper(text=ortho_mpl, is_bold=False, genre='m')}; '
+            f'<gr><i>fs. </i></gr>{span_wrapper(text=ortho_fs, is_bold=False, genre='f')}; '
+            f'<gr><i>fpl. </i></gr>{span_wrapper(text=ortho_fpl, is_bold=False, genre='f')}]'
         )
     else:
         return None
@@ -1000,7 +1040,7 @@ def get_pronunciation(lemme, lemme_df):
         return lemme_df['orthosyll'].iloc[0]
 
 
-def update_to_export_rows(lemme, pos, noun_decls, pronunciation, translation, export_rows):
+def update_to_export_rows(lemme, pos, noun_decls, pronunciation, translation, deck_id, export_rows):
     if noun_decls is not False:
         if not isinstance(noun_decls, list):
             noun_decls = [noun_decls]
@@ -1017,6 +1057,7 @@ def update_to_export_rows(lemme, pos, noun_decls, pronunciation, translation, ex
                 'Sound': '',
                 'Translation': translation,
                 'POS': pos,
+                'Deck Id': f'{STARTING_DECK_NAME}_{deck_id}',
                 'Tags': '',
             })
 
@@ -1041,21 +1082,3 @@ def write_anki_csv(freq_start, chunk_idx, lemme_chunk, export_rows, formatting_e
 
 if __name__ == "__main__":
     main()
-
-
-"""
-This comment contains the if-statement that makes sense. I used to some substitution plus
-DeMorgan's Law to convert that into the monstrous if-statement you see below this comment.
-
-This was necessary because we cannot check if a genre is "f" or 'm' without first checking
-within its own local evaluated conditional that r1_genre is not NaN.
-
-This 'simplification' allows us to handle empty excel cells without errors.
-
-# if not ((r1_genre == 'm' and r2_genre == "f") or (r1_genre == "f" and r2_genre == 'm')):
-
-if (((pd.isna(r1_genre) or r1_genre == "f") or (pd.isna(r2_genre) or r2_genre == "f")) and
-        ((pd.isna(r1_genre) or r1_genre == 'm') or (pd.isna(r2_genre) or r2_genre == "f"))):
-        
-AHAHAHA HAH! We can just try: except: for NaN errors. Rip.
-"""
