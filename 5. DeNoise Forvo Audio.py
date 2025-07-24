@@ -5,8 +5,8 @@ I'm just going to the leave the best options in main() which will of course writ
 
 Warning: This will overwrite the old files sound files. However, by default all files will be
            backed up in collection.media.backup_{timestamp}. This may lead to a rather large
-           amount of duplicate data. If you prefer to disable this option toggle the configuration
-           BACKUP=True to BACKUP=False.
+           amount of duplicate data. If you prefer to disable this option toggle
+           BACKUP=True to BACKUP=False (NOT RECOMMENDED).
 
 A note about ffmpeg-normalize:
     I appreciate that it exists. That said, it's not ffmpeg; it's a wrapper. It seems to work best with .wav files.
@@ -17,8 +17,8 @@ A note about ffmpeg-normalize:
     https://pypi.org/project/ffmpeg-normalize/1.16.0/
 
 Additional notes:
-    I would not recommend running this repeatedly as data is lost everytime audio is filtered. Over repeated
-    runs data may lose quality.
+    I would not recommend running this repeatedly as data is lost every time audio is filtered. Repeated
+    runs data may (will) cause degraded sound quality.
 """
 from ast import literal_eval
 import datetime
@@ -72,6 +72,47 @@ NORMALIZE_PREFIX = 'norm_'
 EQUALIZER_PREFIX = 'final_'
 
 
+corrupt_files = []
+def main():
+    override_config_from_file()
+
+    t1 = time.time()
+    if BACKUP:
+        backup_audio_collection()
+
+    # populate filenames
+    dir_contents = os.listdir(ANKI_DIR)
+    mp3_filenames = [f for f in dir_contents if (os.path.isfile(os.path.join(ANKI_DIR, f)) and 'hypertts' in f)]
+
+    if CHECK_FOR_CORRUPT_FILES:
+        num_corrupt_audio_files_prior = get_num_corrupt_audio_files(mp3_filenames)
+        print(f'Prior to running: found {num_corrupt_audio_files_prior} corrupt audio files in directory:\n{ANKI_DIR}.\n')
+
+    # parallelize
+    print(f'Executing denoising program on {len(mp3_filenames)} files.\n')
+    with Pool(processes=cpu_count()) as pool:
+        pool.map(process_audio_file, mp3_filenames)
+    # old serial processing for easy debugging/profiling
+    # for filename in mp3_filenames:
+    #     process_audio_file(filename)
+
+    if len(corrupt_files) > 0:
+        print('\nDetected the following corrupted audio files during runtime:')
+        [print(c) for c in corrupt_files]
+        print('')
+
+    if CHECK_FOR_CORRUPT_FILES:
+        num_corrupt_audio_files_after = get_num_corrupt_audio_files(mp3_filenames)
+        if num_corrupt_audio_files_after != num_corrupt_audio_files_prior:
+            print('Error detected. Recommend cease use. The cause may be an outside program, but'
+                  'there are more audio files corrupted after this program executed than before.'
+                  f'Recommend restoring from back at in directory:\n{USER_PATH}/.local/share/Anki2/User 1/\n')
+        print(f'After running: found {num_corrupt_audio_files_after} corrupt audio files in directory:\n{ANKI_DIR}.\n')
+
+    t2 = time.time()
+    print(f'\nWrote {len(mp3_filenames)} new files in {t2-t1} seconds.\n.')
+
+
 def override_config_from_file() -> None:
     """
     This function exists mostly for the author's edification. You probably don't need a
@@ -118,47 +159,6 @@ def override_config_from_file() -> None:
             print(
                 f'\nCredential file at {config_path} is malformed.\nNote: if you delete your file and re-run this program it will remake a sane template.')
             exit(-1)
-
-
-corrupt_files = []
-def main():
-    override_config_from_file()
-
-    t1 = time.time()
-    if BACKUP:
-        backup_audio_collection()
-
-    # populate filenames
-    dir_contents = os.listdir(ANKI_DIR)
-    mp3_filenames = [f for f in dir_contents if (os.path.isfile(os.path.join(ANKI_DIR, f)) and 'hypertts' in f)]
-
-    if CHECK_FOR_CORRUPT_FILES:
-        num_corrupt_audio_files_prior = get_num_corrupt_audio_files(mp3_filenames)
-        print(f'Prior to running: found {num_corrupt_audio_files_prior} corrupt audio files in directory:\n{ANKI_DIR}.\n')
-
-    # parallelize
-    print(f'Executing denoising program on {len(mp3_filenames)} files.\n')
-    with Pool(processes=cpu_count()) as pool:
-        pool.map(process_audio_file, mp3_filenames)
-    # old serial processing for easy debugging/profiling
-    # for filename in mp3_filenames:
-    #     process_audio_file(filename)
-
-    if len(corrupt_files) > 0:
-        print('\nDetected the following corrupted audio files during runtime:')
-        [print(c) for c in corrupt_files]
-        print('')
-
-    if CHECK_FOR_CORRUPT_FILES:
-        num_corrupt_audio_files_after = get_num_corrupt_audio_files(mp3_filenames)
-        if num_corrupt_audio_files_after != num_corrupt_audio_files_prior:
-            print('Error detected. Recommend cease use. The cause may be an outside program, but'
-                  'there are more audio files corrupted after this program executed than before.'
-                  f'Recommend restoring from back at in directory:\n{USER_PATH}/.local/share/Anki2/User 1/\n')
-        print(f'After running: found {num_corrupt_audio_files_after} corrupt audio files in directory:\n{ANKI_DIR}.\n')
-
-    t2 = time.time()
-    print(f'\nWrote {len(mp3_filenames)} new files in {t2-t1} seconds.\n.')
 
 
 def backup_audio_collection():
