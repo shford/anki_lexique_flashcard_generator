@@ -2,16 +2,14 @@
 > Generates Anki import-able flashcards with DeepL translations and sound fields from the French Lexique 3.83.
 
 
-## Installation
+# Installation
 
 1. Clone or download this repository.
 2. Download the Lexique.
 3. In LibreOffice, open Lexique383.xlsb and 'Save As' Lexique383.csv (UTF-8) in desired directory.
-4. For all the program files, you'll need to configure the input file and output locations.
-5. [Optional] Adjust IDE/interpreter memory.\
-    a. I gave my IDE 2 GiB. You could probably get away with less.
-6. Register for DeepL API (free version is fine) and copy your API (auth) key into project_credentials.txt
-7. Run the python files in order of file names.
+4. Configure the input file and output file locations in .py files under the Configuration sections.
+5. Register for DeepL API (free version is fine) and copy your API (auth) key into project_credentials.txt
+6. Run the python files in order of file names.
 
 ## Release History
 
@@ -45,3 +43,6 @@ Noteable DELA Lesser General Public License For Linguistic Resources licensing i
 
 ## Meta
 Distributed under the MIT license and derivative licenses where applicable.
+
+# Disclaimer
+This software is provided "as is", without warranty of any kind, express or implied, including but not limited to the warranties of merchantability, fitness for a particular purpose, and noninfringement. In no event shall the authors or copyright holders be liable for any claim, damages, or other liability, whether in an action of contract, tort, or otherwise, arising from, out of, or in connection with the software or the use or other dealings in the software.
