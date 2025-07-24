@@ -4,10 +4,6 @@
 This... shouldn't exist and is horrible programming. I ought to just correctly
  calculate the number of rows in the initial exports in file 2. or 3. or just combine
  all the files into one large program that reads efficiently in chunks.
-
- todo
-    - this should probably prepend the df_overflow from the previous list to beginning
-        of the next list so that frequency order is preserved
 """
 import pandas as pd
 import os
