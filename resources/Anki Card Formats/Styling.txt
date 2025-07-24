@@ -1,0 +1,90 @@
+.card {
+  font-family: tahoma;
+  font-size: 28px;
+  text-align: center;
+  color: 4a4a4a;
+  background-color: white;
+}
+
+
+/* Container for the POS + English Meaning */
+.card-front {
+  display: inline;
+  white-space: normal;
+  line-height: 1.2;
+}
+
+
+/* todo replace custom html tag gr w/ span class='gr' and .gr css */
+gr {
+  color: gray;
+  font-size: 20px;
+}
+
+
+/* Part of Speech */
+.pos {
+  font-style: italic;
+  color: #6c757d;
+  font-size: 20px;
+  /* display: inline-block; */
+  vertical-align: baseline;
+  position: relative;
+  margin-right: 1px;
+}
+
+
+/* English meaning (main word) */
+.meaning {
+  font-weight: 700;
+  font-size: 40px;
+  color: #4a4a4a;
+  /* display: inline-block; */
+  vertical-align: baseline;
+}
+
+
+/* Noun Declension section on the back */
+.noun-declension {
+  font-size: 40px;
+  color: #4a4a4a;
+  line-height: 1.3;
+  margin-bottom: 12px;
+}
+
+
+/* Pronunciation */
+.pronunciation {
+  font-size: 28px;
+  color: #444;
+  margin-bottom: 6px;
+}
+
+
+/* Sound button */
+.sound {
+  font-size: 20px;
+}
+
+
+/* Make colors nicer */
+:root {
+  --masc-color: #6755f2;
+  --fem-color: #f25555;
+  --purple-color: #c655f2;
+}
+
+.night_mode {
+  --masc-color: #80aaff;
+  --fem-color: #ff8080;
+}
+
+
+/* Set colors for genre*/
+.masc {
+  color: var(--masc-color);
+}
+
+.fem {
+  color: var(--fem-color);
+}

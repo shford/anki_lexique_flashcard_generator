@@ -1,0 +1,4 @@
+<div class="card-front">
+  <span class="pos">{{POS}}. </span>
+  <span class="meaning">{{English Meaning}}</span>
+</div>
