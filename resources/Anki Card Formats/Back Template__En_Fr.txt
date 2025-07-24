@@ -1,0 +1,4 @@
+<div class="noun-declension">{{Noun Declension}}</div>
+<div class="pronunciation">/{{Pronunciation}}/</div>
+<div class="sound">{{Sound}}</div>
+{{FrontSide}}
