@@ -36,8 +36,8 @@ import soundfile as sf
 from scipy.signal import medfilt
 
 # ==== Configuration ====
-BACKUP = True                      # todo toggle to True prior to pushing
-CHECK_FOR_CORRUPT_FILES = True     # recommend leave as true, doesn't add that much time
+BACKUP = False                      # todo toggle to True prior to pushing
+CHECK_FOR_CORRUPT_FILES = False     # recommend leave as true, doesn't add that much time
 WRITE_INTERMEDIATE_FILES = False   # True is helpful if you to re-fine tune what each function does
 # ========================
 
@@ -72,6 +72,7 @@ EQUALIZER_PREFIX = 'final_'
 
 corrupt_files = []
 def main():
+    t1 = time.time()
     if BACKUP:
         backup_audio_collection()
 
@@ -104,7 +105,8 @@ def main():
                   f'Recommend restoring from back at in directory:\n{USER_PATH}/.local/share/Anki2/User 1/\n')
         print(f'After running: found {num_corrupt_audio_files_after} corrupt audio files in directory:\n{ANKI_DIR}.\n')
 
-    print(f'\nWrote {len(mp3_filenames)} new files.')
+    t2 = time.time()
+    print(f'\nWrote {len(mp3_filenames)} new files in {t2-t1} seconds.\n.')
 
 
 def backup_audio_collection():
@@ -167,12 +169,12 @@ def audio_chain(pcm_bytes, filename):
     pcm_bytes = ffmpeg_lowpass_highpass(pcm_bytes, filename)
 
     # 4. x3 rounds of afftdn for general clarity
-    pcm_bytes = ffmpeg_afftdn(pcm_bytes, filename)
-    pcm_bytes = ffmpeg_afftdn(pcm_bytes, filename)
-    pcm_bytes = ffmpeg_afftdn(pcm_bytes, filename)
+    # pcm_bytes = ffmpeg_afftdn(pcm_bytes, filename)
+    # pcm_bytes = ffmpeg_afftdn(pcm_bytes, filename)
+    # pcm_bytes = ffmpeg_afftdn(pcm_bytes, filename)
 
     # 5. stft is good at cleaning front and tail
-    pcm_bytes = neural_nine_demo(pcm_bytes, filename)
+    # pcm_bytes = neural_nine_demo(pcm_bytes, filename)
 
     # skip local volume normalization - it ruins emphasis
 
