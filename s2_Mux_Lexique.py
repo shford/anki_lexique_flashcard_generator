@@ -8,8 +8,8 @@ import os
 import pandas as pd
 
 # project files
-from s1_Initial_Lexique_Filter import OUTPUT_DIR
-from s1_Initial_Lexique_Filter import OUTPUT_CSV as INPUT_CSV
+from s1_Filter_Lexique import OUTPUT_DIR
+from s1_Filter_Lexique import OUTPUT_CSV as INPUT_CSV
 
 
 # ==== CONFIGURATION ====
