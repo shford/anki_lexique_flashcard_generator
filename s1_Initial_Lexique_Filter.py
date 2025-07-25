@@ -7,19 +7,23 @@
 @Note: This is going to be slow-ish. On my machine it took ~1.8 minutes to run.
         But it only needs to run once.
 """
+# python core libs
 import gc
 import os
 import time
 import warnings
 from multiprocessing import Pool, cpu_count
 
-
+# external library libs
 import pandas as pd
 
 
 # ==== Configuration ====
-user_path = os.path.expanduser('~')
-INPUT_CSV = f'resources/Lexique383.csv'
+# example for alternative directory (works on Nix/Windows), such as to the Desktop
+# user_path = os.path.expanduser('~')
+# DIR_PATH = f'{user_path}/Desktop' # to the user's Desktop
+DIR_PATH = 'resources'
+INPUT_CSV = f'{DIR_PATH}/Lexique383.csv'
 OUTPUT_DIR = f'default_output'
 OUTPUT_CSV = f'{OUTPUT_DIR}/Lexique383 - Filtered.csv'
 # ========================
