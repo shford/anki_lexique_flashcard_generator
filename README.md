@@ -31,33 +31,32 @@ Python files correspond to steps (s1..s5).
 
 I'd like to revise this project so that everything could be configured and run from one file, however, that will have to wait.
 
-# Installation
+# Installation / Instructions
 
 1. Clone or download this repository.
-2. Download the Lexique.
-3. In LibreOffice, open Lexique383.xlsb and 'Save As' Lexique383.csv (UTF-8) in desired directory.
-4. Configure the input file and output file locations in .py files under the Configuration sections for each python file.
-5. Register for DeepL API (free version is fine) and copy your API (auth) key into project_credentials.txt
-6. Register for desired audio API (recommend Forvo API).
-6. Run python files 1 through 4.
-7. Open Anki and add a new Note Type with fields ['Lemma', 'Noun Declension', 'Pronunciation', 'Sound', 'English Meaning', 'POS', Deck Id'].
+2. [Optional] Change default configuration in python files.
+   - Default output location is under your project location's 'default_output' folder.
+3. Register for DeepL API (free version is fine) and copy your API (auth) key into project_credentials.txt
+4. Register for desired audio API (recommend Forvo API).
+5. Run python files 1 through 4.
+6. Open Anki and add a new Note Type with fields ['Lemma', 'Noun Declension', 'Pronunciation', 'Sound', 'English Meaning', 'POS', Deck Id'].
    - Select 'Tools'
    - Select 'Manage Note Types'
    - Select 'Add'
    - Select preferred type -recommend: 'Add Basic (and reverse card)'
    - Enter your Note Type name and select 'Ok'
    - Close/exit window
-8. In Anki, under tab Decks, create desired Decks via 'Create Deck'.
-9. [Follow guide to import decks from files](https://www.youtube.com/watch?v=_7hMmr0PEPQ)
-10. [Follow guide to add audio from HyperTTS](https://www.youtube.com/watch?v=QYK2GPxksq4)
-    - Note: You can use the Forvo API directly as shown below.
-      - <i>Hint: Select the 'api:url' field to toggle the url as desired.</i> 
-    !['HyperTTS Picture'](hypertts_config.png)
-11. If desired, run python 5 to remove background noise and normalize volume.
+7. In Anki, under tab Decks, create desired Decks via 'Create Deck'.
+8. [Follow guide to import decks from files](https://www.youtube.com/watch?v=_7hMmr0PEPQ)
+9. [Follow guide to add audio from HyperTTS](https://www.youtube.com/watch?v=QYK2GPxksq4)
+   - Note: You can use the Forvo API directly as shown below.
+     - <i>Hint: Select the 'api:url' field to toggle the url as desired.</i> 
+   !['HyperTTS Picture'](hypertts_config.png)
+10. If desired, run python 5 to remove background noise and normalize volume.
     - Recommended if you chose a hyperTTS audio service that uses human generated clips (i.e. Forvo).
     - Note: Ensure no targeted audio files are open in other applications.
-12. Close and reopen Anki.
-13. Paste formatting rules from `'resources/Anki Card Formats'` into their respective Card types. The styling will be the same for both Fr to Target Langauge and Target Language to French.
+11. Close and reopen Anki.
+12. Paste formatting rules from `'resources/Anki Card Formats'` into their respective Card types. The styling will be the same for both Fr to Target Langauge and Target Language to French.
 13. I recommend syncing to AnkiWeb so that your work is backed up. That's it!
 
 ## Contributing
