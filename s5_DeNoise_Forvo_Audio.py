@@ -75,7 +75,7 @@ EQUALIZER_PREFIX = 'final_'
 
 corrupt_files = []
 def main():
-    override_config_from_file()
+    override_prog_configs_from_file(globals())
 
     t1 = time.time()
     if BACKUP:
@@ -114,7 +114,7 @@ def main():
     print(f'\nWrote {len(mp3_filenames)} new files in {t2-t1} seconds.\n.')
 
 
-def override_config_from_file() -> None:
+def override_prog_configs_from_file(global_symbol_table) -> None:
     """
     This function exists mostly for the author's edification. You probably don't need a
     config file.
@@ -142,7 +142,6 @@ def override_config_from_file() -> None:
         config_raw = f.read()
 
         try:
-            global_symbol_table = globals()
             config_globals_dict = literal_eval(config_raw)
 
             for key in config_globals_dict.keys():
