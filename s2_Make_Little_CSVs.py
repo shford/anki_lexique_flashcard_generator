@@ -17,7 +17,7 @@ CHUNK_SIZE = 500
 SPOKEN_COUNT = 400
 WRITTEN_COUNT = 100
 DESIRED_FLASHCARDS = 20000  # set equal to 0 for all available
-MUXED_LEXIQUE = f'{OUTPUT_DIR}/Lexique383 - Muxed.csv'
+OUTPUT_MUXED_CSV = f'{OUTPUT_DIR}/Lexique383 - Muxed.csv'
 # ========================
 
 # Derived Constants
@@ -26,7 +26,7 @@ SELECTED_LEMMES = int(DESIRED_FLASHCARDS * 0.25) # apply fuzz factor
 
 def main():
     muxed_df = mux_frequencies()
-    muxed_df.to_csv(MUXED_LEXIQUE, index=False, encoding='utf-8')
+    muxed_df.to_csv(OUTPUT_MUXED_CSV, index=False, encoding='utf-8')
     print("\nDone: Wrote df w/ intermixed by frequencies of spoken/written.")
 
 
