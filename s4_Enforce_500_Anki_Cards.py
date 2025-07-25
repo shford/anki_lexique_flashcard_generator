@@ -55,7 +55,7 @@ def main():
         else:
             # init df2 regardless of first or last run
             START += CHUNK_SIZE
-            filename2 = f'anki_deck_{START} - {START+CHUNK_SIZE-1}.csv'
+            filename2 = f'{OUTPUT_PREFIX}{START} - {START+CHUNK_SIZE-1}.csv'
             path2 = f'{ANKI_CSV_DIR}/{filename2}'
             df2 = pd.read_csv(path2, encoding='utf-8', header=None)
 
