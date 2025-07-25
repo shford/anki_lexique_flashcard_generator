@@ -37,9 +37,10 @@ import soundfile as sf
 from scipy.signal import medfilt
 
 # ==== Configuration ====
-BACKUP = True
-CHECK_FOR_CORRUPT_FILES = True
-WRITE_INTERMEDIATE_FILES = False   # True is helpful if you to re-fine tune what each function does
+BACKUP = True                       # recommend True
+CHECK_FOR_CORRUPT_FILES = True      # recommend True
+WRITE_INTERMEDIATE_FILES = False    # recommend False; True is helpful if you want to manually fine tune what each filter functions
+SELECTED_AUDIO_PREFIX = 'hypertts'  # recommend leave as hypertts for Forvo; otherwise open card and see what your generated file names looks like
 # ========================
 
 # Formatting Constants - strongly recommend you do not change DESIRED_
@@ -82,7 +83,7 @@ def main():
 
     # populate filenames
     dir_contents = os.listdir(ANKI_DIR)
-    mp3_filenames = [f for f in dir_contents if (os.path.isfile(os.path.join(ANKI_DIR, f)) and 'hypertts' in f)]
+    mp3_filenames = [f for f in dir_contents if (os.path.isfile(os.path.join(ANKI_DIR, f)) and SELECTED_AUDIO_PREFIX in f)]
 
     if CHECK_FOR_CORRUPT_FILES:
         num_corrupt_audio_files_prior = get_num_corrupt_audio_files(mp3_filenames)
