@@ -1,13 +1,16 @@
 """
 Slice filtered .csv lexique into smaller files containing 500 lemmes apiece.
 """
+# python core lib
 import os
 
+# external libs
 import pandas as pd
 
 # project files
 from s1_Initial_Lexique_Filter import OUTPUT_DIR
 from s1_Initial_Lexique_Filter import OUTPUT_CSV as INPUT_CSV
+
 
 # === CONFIGURATION ===
 LEXIQUE_OUTPUT_DIR = f'{OUTPUT_DIR}/lexique_exported_files'
