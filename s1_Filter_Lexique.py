@@ -18,7 +18,7 @@ from multiprocessing import Pool, cpu_count
 import pandas as pd
 
 
-# ==== Configuration ====
+# ==== CONFIGURATION ====
 # example for alternative directory (works on Nix/Windows), such as to the Desktop
 # user_path = os.path.expanduser('~')
 # DIR_PATH = f'{user_path}/Desktop' # to the user's Desktop
