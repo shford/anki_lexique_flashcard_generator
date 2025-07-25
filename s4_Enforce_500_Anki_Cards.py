@@ -8,9 +8,9 @@ This... shouldn't exist and is horrible programming. I ought to just correctly
 import pandas as pd
 import os
 
-from s3_Little_CSV_to_Anki_Import_Format import CHUNK_SIZE
-from s3_Little_CSV_to_Anki_Import_Format import OUTPUT_PREFIX
-from s3_Little_CSV_to_Anki_Import_Format import ANKI_CSV_OUTPUT_DIR as ANKI_CSV_DIR
+from s3_Export_Anki_Format import CHUNK_SIZE
+from s3_Export_Anki_Format import OUTPUT_PREFIX
+from s3_Export_Anki_Format import ANKI_CSV_OUTPUT_DIR as ANKI_CSV_DIR
 
 # ==== Configuration ====
 # see previous steps
