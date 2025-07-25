@@ -19,8 +19,8 @@ import pandas as pd
 
 # ==== Configuration ====
 user_path = os.path.expanduser('~')
-input_file_path = f'{user_path}/Documents/flashcard_project_new/Lexique383.csv'
-output_file_path = f'{user_path}/Documents/flashcard_project_new/Lexique383 - Filtered.csv'
+input_file_path = f'resources/Lexique383.csv'
+output_file_path = f'default_output/Lexique383 - Filtered.csv'
 # ========================
 
 # Globals
@@ -181,14 +181,18 @@ def filter_df_for_highest_pos(df) -> pd.DataFrame:
 
     # populate df with only highest priority POS for each lemme
     # note: use list for intermediate step to avoid pd.concat() O(n^2) slow down inside loop
-    tmp_df_list = [] # appended to in parallized_filter_lemme_for_highest_pos()
-    args = [(lemme, lemme_to_df_lookup[lemme], tmp_df_list) for lemme in lemmes] # starmap takes the function arguments as a list of tuples to unpack
-    # serial version
-    # for l in lemmes:
-    #     lemme_df = lemme_to_df_lookup[lemme]
-    #     parallized_filter_lemme_for_highest_pos(lemme, lemme_to_df_lookup[lemme], tmp_df_list)
-    with Pool(processes=cpu_count()) as pool:
-        pool.starmap(parallized_filter_lemme_for_highest_pos, args)
+    tmp_df_list = []
+    for l in lemmes:
+        # get all rows associated with this lemme
+        lemme_df = lemme_to_df_lookup[l]
+
+        # filter
+        min_rank = lemme_df['pos_rank'].min()
+        lemme_df = lemme_df[lemme_df['pos_rank'] == min_rank]
+
+        # append filtered rows to df
+        lemme_list = lemme_df.to_dict(orient='records')
+        tmp_df_list.extend(lemme_list)
 
     # convert intermediate into a proper dataframe
     df = pd.DataFrame(tmp_df_list, columns=df_cols)
@@ -197,16 +201,6 @@ def filter_df_for_highest_pos(df) -> pd.DataFrame:
     df = df.drop(columns=['pos_rank'])
 
     return df
-
-
-def parallized_filter_lemme_for_highest_pos(lemme, lemme_df, tmp_df_list):
-    # filter
-    min_rank = lemme_df['pos_rank'].min()
-    lemme_df = lemme_df[lemme_df['pos_rank'] == min_rank]
-
-    # append filtered rows to df
-    lemme_list = lemme_df.to_dict(orient='records')
-    tmp_df_list.extend(lemme_list)
 
 
 def group_dfs_by_lemme(df, df_cols) -> (list, dict):
