@@ -1,8 +1,27 @@
+/* Make colors nicer - root is default and applies to all modes unless overriden (by .night_mode) */
+:root {
+  --text-color: #4a4a4a;
+  --pron-color: #4a4a4a;
+  --pos-color: #808080;
+  --masc-color: #6755f2;
+  --fem-color: #f25555;
+}
+
+
+.night_mode {
+  --text-color: #fcfcfc;
+  --pron-color: #fcfcfc;
+  --pos-color: #808080;
+  --masc-color: #80aaff;
+  --fem-color: #ff8080;
+}
+
+
 .card {
   font-family: tahoma;
-  font-size: 28px;
+  font-size: 40px;
   text-align: center;
-  color: 4a4a4a;
+  color: var(--text-color);
   background-color: white;
 }
 
@@ -17,7 +36,7 @@
 
 /* todo replace custom html tag gr w/ span class='gr' and .gr css */
 gr {
-  color: gray;
+  color: var(--pos-color);
   font-size: 20px;
 }
 
@@ -25,7 +44,7 @@ gr {
 /* Part of Speech */
 .pos {
   font-style: italic;
-  color: #6c757d;
+  color: var(--pos-color);
   font-size: 20px;
   /* display: inline-block; */
   vertical-align: baseline;
@@ -38,7 +57,7 @@ gr {
 .meaning {
   font-weight: 700;
   font-size: 40px;
-  color: #4a4a4a;
+  color: var(--text-color);
   /* display: inline-block; */
   vertical-align: baseline;
 }
@@ -47,7 +66,7 @@ gr {
 /* Noun Declension section on the back */
 .noun-declension {
   font-size: 40px;
-  color: #4a4a4a;
+  color: var(--text-color);
   line-height: 1.3;
   margin-bottom: 12px;
 }
@@ -55,8 +74,8 @@ gr {
 
 /* Pronunciation */
 .pronunciation {
-  font-size: 28px;
-  color: #444;
+  /*font-size: 28px;*/
+  color: var(--pron-color);
   margin-bottom: 6px;
 }
 
@@ -67,20 +86,7 @@ gr {
 }
 
 
-/* Make colors nicer */
-:root {
-  --masc-color: #6755f2;
-  --fem-color: #f25555;
-  --purple-color: #c655f2;
-}
-
-.night_mode {
-  --masc-color: #80aaff;
-  --fem-color: #ff8080;
-}
-
-
-/* Set colors for genre*/
+/* Set colors for genre */
 .masc {
   color: var(--masc-color);
 }
