@@ -1,5 +1,5 @@
 """
-Mux spoken/written and write to file.
+@Purpose: Mux spoken/written and write to file.
 """
 # external libs
 import pandas as pd

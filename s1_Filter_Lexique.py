@@ -1,8 +1,8 @@
 """
+@Purpose: Filter lexique lemmes (note: additional correction done dynamically in Step 3).
+
 @Instructions:
   See Github README.
-
-@Purpose: Filter lexique lemmes (note: additional correction done dynamically in Step 3).
 
 @Note: This is going to be slow-ish. On my machine it took ~1.8 minutes to run.
         But it only needs to run once.

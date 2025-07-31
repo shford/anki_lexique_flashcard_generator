@@ -1,12 +1,15 @@
 """
-Provide a variety of free denoising options.
+@Purpose: Provide a variety of free denoising options.
 
-I'm just going to the leave the best options in main() which will of course write the new files.
+@Instructions: It is unlikely that you will need to change anything in this file.
+                I'm just going to the leave the best options in main() which will of course write the new files.
 
 Warning: This will overwrite the old files sound files. However, by default all files will be
-           backed up in collection.media.backup_{timestamp}. This may lead to a rather large
-           amount of duplicate data. If you prefer to disable this option toggle
-           BACKUP=True to BACKUP=False (NOT RECOMMENDED).
+           backed up in collection.media.backup_{timestamp}. If you prefer to disable this
+           option, toggle BACKUP=True to BACKUP=False (NOT RECOMMENDED).
+
+           To revert unwanted audio changes, simply delete collection.media and rename the .backup_{timestamp}
+           folder to collection.media
 
 A note about ffmpeg-normalize:
     I appreciate that it exists. That said, it's not ffmpeg; it's a wrapper. It seems to work best with .wav files.
@@ -17,8 +20,8 @@ A note about ffmpeg-normalize:
     https://pypi.org/project/ffmpeg-normalize/1.16.0/
 
 Additional notes:
-    I would not recommend running this repeatedly as data is lost every time audio is filtered. Repeated
-    runs data may (will) cause degraded sound quality.
+    I would not recommend running this repeatedly as data is lost every time audio is filtered.
+    Repeated runs data may (read as: will) cause degraded sound quality.
 """
 from ast import literal_eval
 import datetime
