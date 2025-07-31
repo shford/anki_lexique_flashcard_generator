@@ -4,18 +4,16 @@
 import pandas as pd
 import os
 
+from s2_Mux_Lexique import DESIRED_FLASHCARDS as STOP
 from s3_Export_Anki_Format import CHUNK_SIZE
 from s3_Export_Anki_Format import OUTPUT_PREFIX
 from s3_Export_Anki_Format import ANKI_CSV_OUTPUT_DIR as ANKI_CSV_DIR
 
 # ==== Configuration ====
-# see previous steps
 # ========================
 
 def main():
     START = 1
-    STOP = 1000
-
     check_indices(START, STOP)
 
     # set up initial state
@@ -32,11 +30,11 @@ def main():
         df_overflow = pd.DataFrame()
 
     # begin balancing row count
-    NUM_FILES = int((STOP-START+1)/CHUNK_SIZE)
+    NUM_FILES = int((STOP - START + 1) / CHUNK_SIZE)
     while NUM_FILES >= 1:
         if df1 is None:
             # init df1 from CSV
-            filename1 = f'anki_deck_{START} - {START+CHUNK_SIZE-1}.csv'
+            filename1 = f'anki_deck_{START} - {START + CHUNK_SIZE - 1}.csv'
             path1 = f'{ANKI_CSV_DIR}/{filename1}'
             df1 = pd.read_csv(path1, encoding='utf-8', header=None)
         else:
@@ -51,10 +49,9 @@ def main():
         else:
             # init df2 regardless of first or last run
             START += CHUNK_SIZE
-            filename2 = f'{OUTPUT_PREFIX}{START} - {START+CHUNK_SIZE-1}.csv'
+            filename2 = f'{OUTPUT_PREFIX}{START} - {START + CHUNK_SIZE - 1}.csv'
             path2 = f'{ANKI_CSV_DIR}/{filename2}'
             df2 = pd.read_csv(path2, encoding='utf-8', header=None)
-
 
         # prepend from df_overflow prior to balancing regardless of length
         if len(df_overflow) > 0:
@@ -65,11 +62,11 @@ def main():
         difference = len(df1) - CHUNK_SIZE
         if difference > 0:
             # append leftover from df1 to df_overflow
-            excesss_df1 = df1.iloc[CHUNK_SIZE:CHUNK_SIZE+difference]
+            excesss_df1 = df1.iloc[CHUNK_SIZE:CHUNK_SIZE + difference]
             df_overflow = pd.concat([df_overflow, excesss_df1])
             df1 = df1.iloc[:-difference]
         elif difference == 0:
-            pass # noop
+            pass  # noop
         elif difference < 0:
             # append to df1 from df2
             difference = abs(difference)
@@ -148,6 +145,7 @@ def check_indices(start, stop):
         raise Exception('Invalid STOP - ensure it is divisible by 500.')
 
     return
+
 
 # what if we get to df1 = 2nd to last file and df2 (last file) ends up empty?
 main()
