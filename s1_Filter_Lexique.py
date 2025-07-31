@@ -36,7 +36,11 @@ def main():
     t1 = time.time()
     clean_lexique()
     t2 = time.time()
-    print(f'Cleaned lexique in {t2-t1} seconds.')
+    print(f'Filtered lexique in {t2-t1} seconds.')
+
+    # write filtered .csv
+    df.to_csv(OUTPUT_CSV, index=False, encoding='utf-8')
+    print(f'Wrote clean .csv file saved to: {OUTPUT_CSV}')
 
 
 def clean_lexique():
@@ -56,11 +60,11 @@ def clean_lexique():
                        '8_freqlemlivres': 'freqlemlivres',
                        '14_islem': 'islem',
                        '28_orthosyll': 'orthosyll',
+                       '2_phon': 'sampa',
                        }, inplace=True)
 
     # remove unwanted columns
-    df = df.drop(columns=['2_phon',
-                          '9_freqfilms2',
+    df = df.drop(columns=['9_freqfilms2',
                           '10_freqlivres',
                           '11_infover',
                           '12_nbhomogr',
@@ -126,9 +130,8 @@ def clean_lexique():
     # filter for highest priority POS
     df = filter_df_for_highest_pos(df)
 
-    # create a new ODS document
-    df.to_csv(OUTPUT_CSV, index=False, encoding='utf-8')
-    print(f'Wrote clean .csv file saved to: {OUTPUT_CSV}')
+    # return filtered df
+    return df
 
 
 def parse_dela_dict():
@@ -229,13 +232,13 @@ def group_dfs_by_lemme(df, df_cols) -> (list, dict):
     #         lemme_to_list_lookup[lemme] = []
     #     lemme_to_list_lookup[lemme].append(list(row.values()))
 
-    for c1,c2,c3,c4,c5,c6,c7,c8,c9,c10 in zip(df['ortho'], df['lemme'], df['cgram'], df['genre'],
+    for c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11 in zip(df['ortho'], df['sampa'], df['lemme'], df['cgram'], df['genre'],
                                        df['nombre'],df['freqlemfilms'], df['freqlemlivres'],
                                        df['islem'], df['orthosyll'], df['pos_rank']):
-        if c2 not in lemme_to_list_lookup:
-            unique_lemmes.append(c2)
-            lemme_to_list_lookup[c2] = []
-        lemme_to_list_lookup[c2].append([c1,c2,c3,c4,c5,c6,c7,c8,c9,c10])
+        if c3 not in lemme_to_list_lookup:
+            unique_lemmes.append(c3)
+            lemme_to_list_lookup[c3] = []
+        lemme_to_list_lookup[c3].append([c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11])
 
     for lemme in unique_lemmes:
         lemme_to_df_lookup[lemme] = pd.DataFrame(lemme_to_list_lookup[lemme], columns=df_cols) # 2D axis will convert nicely
