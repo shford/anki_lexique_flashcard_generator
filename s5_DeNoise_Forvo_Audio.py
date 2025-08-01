@@ -82,6 +82,7 @@ def main():
 
     t1 = time.time()
     if BACKUP:
+        print('Backing up collection.')
         backup_audio_collection()
 
     # populate filenames
@@ -89,6 +90,7 @@ def main():
     mp3_filenames = [f for f in dir_contents if (os.path.isfile(os.path.join(ANKI_DIR, f)) and SELECTED_AUDIO_PREFIX in f)]
 
     if CHECK_FOR_CORRUPT_FILES:
+        print('Checking for corrupt audio files. This may take some time.')
         num_corrupt_audio_files_prior = get_num_corrupt_audio_files(mp3_filenames)
         print(f'Prior to running: found {num_corrupt_audio_files_prior} corrupt audio files in directory:\n{ANKI_DIR}.\n')
 
@@ -108,9 +110,9 @@ def main():
     if CHECK_FOR_CORRUPT_FILES:
         num_corrupt_audio_files_after = get_num_corrupt_audio_files(mp3_filenames)
         if num_corrupt_audio_files_after != num_corrupt_audio_files_prior:
-            print('Error detected. Recommend cease use. The cause may be an outside program, but'
-                  'there are more audio files corrupted after this program executed than before.'
-                  f'Recommend restoring from back at in directory:\n{USER_PATH}/.local/share/Anki2/User 1/\n')
+            print('\nError detected. Recommend cease use. The cause may be an outside program, but'
+                  ' there are more audio files corrupted after this program executed than before.'
+                  f' Recommend restoring from back at in directory:\n{USER_PATH}/.local/share/Anki2/User 1/\n')
         print(f'After running: found {num_corrupt_audio_files_after} corrupt audio files in directory:\n{ANKI_DIR}.\n')
 
     t2 = time.time()
@@ -191,6 +193,7 @@ def get_num_corrupt_audio_files(filenames):
             # print(f"ffmpeg stderr for {path}:\n{stderr}\n") # log stderr
             # flag if there are serious decoding errors
             if "Invalid" in stderr or "error" in stderr.lower():
+                print(f'   Corrupt filename: {filename}')
                 bad_files.append(path)
     return len(bad_files)
 
