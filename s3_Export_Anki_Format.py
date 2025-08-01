@@ -1215,7 +1215,7 @@ def update_export_rows(lemme, pos, noun_decl, pronunciation, ipa, translation, d
             'Lemme': lemme,
             'Noun Declension': noun_decl,
             'Pronunciation': pronunciation,
-            'IPA': ipa,
+            # 'IPA': ipa, todo leave this out until syntax highlighting is done - maybe never depending on data sources for sampa to ipa
             'Sound': '',
             'Translation': translation,
             'POS': pos,
