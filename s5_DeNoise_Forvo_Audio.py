@@ -202,9 +202,14 @@ def get_num_corrupt_audio_files(filenames):
                 if RESTORE_CORRUPT_FILES:
                     backup_dir = get_newest_backup_dir(f'{ANKI_DIR}/..')
                     if backup_dir is not None:
-                        shutil.copy(f'{backup_dir}/{filename}', path)
-                        print(f'   Restored corrupt file from backup.')
-                        print('')
+                        try:
+                            shutil.copy(f'{backup_dir}/{filename}', path)
+                            print(f'   Restored corrupt file from backup.')
+                            print('')
+                            bad_files.pop()
+                        except:
+                            print(f'   Failed to restore corrupt file from backup.')
+                            print('')
 
     return len(bad_files)
 
