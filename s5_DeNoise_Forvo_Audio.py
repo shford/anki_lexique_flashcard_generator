@@ -31,6 +31,7 @@ import shutil
 import subprocess
 import time
 from multiprocessing import Pool, cpu_count
+from pathlib import Path
 
 import librosa
 
@@ -42,6 +43,7 @@ from scipy.signal import medfilt
 # ==== Configuration ====
 BACKUP = True                       # recommend True
 CHECK_FOR_CORRUPT_FILES = True      # recommend True
+RESTORE_CORRUPT_FILES = True        # recommend True; works only if CHECK_FOR_CORRUPT_FILES is True
 WRITE_INTERMEDIATE_FILES = False    # recommend False; True is helpful if you want to manually fine tune what each filter functions
 SELECTED_AUDIO_PREFIX = 'hypertts'  # recommend leave as hypertts for Forvo; otherwise open card and see what your generated file names looks like
 # ========================
@@ -92,7 +94,7 @@ def main():
     if CHECK_FOR_CORRUPT_FILES:
         print('Checking for corrupt audio files. This may take some time.')
         num_corrupt_audio_files_prior = get_num_corrupt_audio_files(mp3_filenames)
-        print(f'Prior to running: found {num_corrupt_audio_files_prior} corrupt audio files in directory:\n{ANKI_DIR}.\n')
+        print(f'Prior to running, found {num_corrupt_audio_files_prior} corrupt audio files in directory:\n{ANKI_DIR}.\n')
 
     # parallelize
     print(f'Executing denoising program on {len(mp3_filenames)} files.\n')
@@ -193,9 +195,29 @@ def get_num_corrupt_audio_files(filenames):
             # print(f"ffmpeg stderr for {path}:\n{stderr}\n") # log stderr
             # flag if there are serious decoding errors
             if "Invalid" in stderr or "error" in stderr.lower():
-                print(f'   Corrupt filename: {filename}')
+                print(f'   Found corrupt audio file: {filename}')
                 bad_files.append(path)
+
+                # attempts to restore corrupt files from most recent backup
+                if RESTORE_CORRUPT_FILES:
+                    backup_dir = get_newest_backup_dir(f'{ANKI_DIR}/..')
+                    if backup_dir is not None:
+                        shutil.copy(f'{backup_dir}/{filename}', path)
+                        print(f'   Restored corrupt file from backup.')
+                        print('')
+
     return len(bad_files)
+
+
+def get_newest_backup_dir(backup_parent_dir, restore_from_oldest_backup=False):
+    dirs = [d for d in Path(backup_parent_dir).iterdir() if d.is_dir() and 'collection.media.backup_' in d.name]
+    if len(dirs) == 0:
+        return None
+
+    if restore_from_oldest_backup:
+        return min(dirs, key=lambda d: d.stat().st_mtime, default=None)
+    else:
+        return max(dirs, key=lambda d: d.stat().st_mtime, default=None)
 
 
 def process_audio_file(filename):
@@ -844,7 +866,7 @@ def external_tool_ffmpeg_normalize(pcm_bytes, filename):
         'ffmpeg-normalize',
         ffmpeg_normalize_input_filepath,
         '-nt', 'ebu',                 # global loudness normalization
-        '-t', '-23',                  # target loudness (LUFS)
+        '-t', '-16',                  # target loudness (LUFS)
         '-lrt', '7',                  # preserve some dynamic range
         '-o', ffmpeg_normalize_output_filepath,
         '--force'
