@@ -212,8 +212,11 @@ def create_flashcard_rows(lemmes, df, chunk_id, start_idx, end_idx,
         # copy orthosyll column to pronunciation column - use matching lemme orthosyll if available
         pronunciation = get_pronunciation(lemme, lemme_df)
 
+        # ipa
+        ipa = map_sampa_to_ipa(lemme, lemme_df)
+
         # format 'Noun Declension' field
-        noun_decl = format_noun_declension(lemme, lemme_df, pos, pronunciation, chunk_id, export_rows, card,
+        noun_decl = format_noun_declension(lemme, lemme_df, pos, pronunciation, ipa, chunk_id, export_rows, card,
                                            deepl_client, deepl_src_lang, deepl_tgt_lang, translation_pairs)
         if noun_decl is None:
             continue  # skip this so-called 'lemme' as it's a duplicate entry
@@ -222,7 +225,7 @@ def create_flashcard_rows(lemmes, df, chunk_id, start_idx, end_idx,
         translation = translate(lemme, pos, deepl_client, deepl_src_lang, deepl_tgt_lang, translation_pairs)
 
         # update rows
-        update_export_rows(lemme, pos, noun_decl, pronunciation, translation, chunk_id, export_rows)
+        update_export_rows(lemme, pos, noun_decl, pronunciation, ipa, translation, chunk_id, export_rows)
 
     # write sheet to be imported into Anki
     write_anki_csv(start_idx, end_idx, export_rows)
@@ -403,7 +406,7 @@ def parse_start_frequency(filename) -> int:
     return int(match.group(1))
 
 
-def format_noun_declension(lemme, rows, pos, pronunciation, chunk_idx, export_rows, card,
+def format_noun_declension(lemme, rows, pos, pronunciation, ipa, chunk_idx, export_rows, card,
                            deepl_client, deepl_src_lang, deepl_tgt_lang, translation_pairs):
     """
     :return: return formatted html as str or return None to continue to next lemme.
@@ -458,8 +461,8 @@ def format_noun_declension(lemme, rows, pos, pronunciation, chunk_idx, export_ro
         if male_translation != fem_translation:
             m_noun_decl = noun_decl[0]
             f_noun_decl = noun_decl[1]
-            update_export_rows(lemme, pos, m_noun_decl, pronunciation, male_translation, chunk_idx, export_rows)
-            update_export_rows(lemme, pos, f_noun_decl, pronunciation, fem_translation, chunk_idx, export_rows)
+            update_export_rows(lemme, pos, m_noun_decl, pronunciation, ipa, male_translation, chunk_idx, export_rows)
+            update_export_rows(lemme, pos, f_noun_decl, pronunciation, ipa, fem_translation, chunk_idx, export_rows)
             return None  # move to next lemme
         else:
             # correct false positive homo, homo, same lemme diff meaning row_2() conditional -> mpf (probably)
@@ -467,7 +470,7 @@ def format_noun_declension(lemme, rows, pos, pronunciation, chunk_idx, export_ro
             # _ p
             noun_decl = mpf_det_bold(lemme, 'n', card.sing, card.plural, card.sing)
             translation = male_translation.replace('', '')
-            update_export_rows(lemme, pos, noun_decl, pronunciation, translation, chunk_idx, export_rows)
+            update_export_rows(lemme, pos, noun_decl, pronunciation, ipa, translation, chunk_idx, export_rows)
             return None # move to next lemme
 
     return noun_decl
@@ -1202,7 +1205,7 @@ def get_pronunciation(lemme, lemme_df):
         return lemme_df['orthosyll'].iloc[0]
 
 
-def update_export_rows(lemme, pos, noun_decl, pronunciation, translation, deck_id, export_rows):
+def update_export_rows(lemme, pos, noun_decl, pronunciation, ipa, translation, deck_id, export_rows):
     if translation is not None:
         # apply contraction rule to noun_decl
         noun_decl = apply_contraction(noun_decl)
@@ -1212,6 +1215,7 @@ def update_export_rows(lemme, pos, noun_decl, pronunciation, translation, deck_i
             'Lemme': lemme,
             'Noun Declension': noun_decl,
             'Pronunciation': pronunciation,
+            'IPA': ipa,
             'Sound': '',
             'Translation': translation,
             'POS': pos,
@@ -1235,6 +1239,87 @@ def write_anki_csv(start_idx, end_idx, export_rows):
     print(f'Exported {len(export_df)} lemmas to {out_file}')
     print(f'Formatting exceptions: {formatting_exception_count}')
     print('')
+
+
+def map_sampa_to_ipa(lemme, lemme_df):
+    """Convert a French SAMPA string (Lexique 3) to IPA"""
+    sampa_row = lemme_df[lemme_df['ortho'] == lemme]
+    if not sampa_row.empty:
+        sampa = sampa_row['sampa'].iloc[0]
+    else:
+        sampa = lemme_df['sampa'].iloc[0]
+
+
+    # ordered list: 2-char tokens first, then 1-char
+    sampa_ipa_map = {
+        'O~': 'ɔ̃', 'E~': 'ɛ̃', 'A~': 'ɑ̃', '9~': 'œ̃',
+        'S': 'ʃ', 'Z': 'ʒ', 'N': 'ŋ', 'R': 'ʁ', 'j': 'j', 'w': 'w', 'H': 'ɥ',
+        '2': 'ø', '9': 'œ', '@': 'ə',
+        'a': 'a', 'b': 'b', 'd': 'd', 'e': 'e', 'f': 'f', 'g': 'g',
+        'i': 'i', 'k': 'k', 'l': 'l', 'm': 'm', 'n': 'n', 'o': 'o',
+        'p': 'p', 's': 's', 't': 't', 'u': 'u', 'v': 'v', 'x': 'ks',
+        'y': 'y', 'z': 'z', '~': '̃', '°': '', '§': '',
+    }
+
+    def map_accented_to_ipa(text):
+        ACCENTED_CHAR_MAP = {
+            'é': 'e',  # /e/ - close-mid front unrounded
+            'è': 'E',  # /ɛ/
+            'ê': 'E',
+            'ë': 'E',
+            'à': 'a',
+            'â': 'a',
+            'î': 'i',
+            'ï': 'i',
+            'ô': 'o',
+            'ù': 'y',
+            'û': 'y',
+            'ü': 'y',
+            'ç': 's',
+            'œ': '9',  # approximate
+            'æ': 'a',  # close enough
+            'É': 'e',
+            'È': 'E',
+            'Ê': 'E',
+            'À': 'a',
+            'Â': 'a',
+            'Î': 'i',
+            'Ï': 'i',
+            'Ô': 'o',
+            'Ù': 'y',
+            'Û': 'y',
+            'Ü': 'y',
+            'Ç': 's',
+            'Œ': '9',
+            'Æ': 'a',
+        }
+        return ''.join(ACCENTED_CHAR_MAP.get(c, c) for c in text)
+
+    # remove spaces and accents
+    sampa = sampa.replace(' ', '')
+    # sampa = map_accented_to_ipa(sampa)
+
+    # region build ipa
+    ipa = ''
+    if sampa.startswith('°'):
+        ipa += 'ə'  # or '' if you want to ignore it
+        sampa = sampa[1:]
+
+    i = 0
+    while i < len(sampa):
+        # Try two-character match first (e.g., 'sj', 'Zy')
+        if i + 1 < len(sampa) and sampa[i:i+2] in sampa_ipa_map:
+            ipa += sampa_ipa_map[sampa[i:i+2]]
+            i += 2
+        elif sampa[i] in sampa_ipa_map:
+            ipa += sampa_ipa_map[sampa[i]]
+            i += 1
+        else:
+            ipa += sampa[i]  # fallback: preserve unknown character
+            i += 1
+    # endregion
+
+    return ipa
 
 
 if __name__ == "__main__":
