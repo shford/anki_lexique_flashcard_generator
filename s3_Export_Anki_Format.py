@@ -129,6 +129,7 @@ def main():
         # writes flashcards to file
         create_flashcard_rows(lemme_chunk, chunk_df, chunk_id, start_idx, end_idx, deepl_client, deepl_source_language, deepl_target_language, aws_client, aws_src_lang, aws_tgt_lang, foreign_lemme_trans_pairs)
         chunk_id += 1
+
     # close AWS client
     # aws_client.close()
 
@@ -1215,7 +1216,7 @@ def update_export_rows(lemme, pos, noun_decl, pronunciation, ipa, translation, d
             'Lemme': lemme,
             'Noun Declension': noun_decl,
             'Pronunciation': pronunciation,
-            # 'IPA': ipa, todo leave this out until syntax highlighting is done - maybe never depending on data sources for sampa to ipa
+            'IPA': ipa,
             'Sound': '',
             'Translation': translation,
             'POS': pos,
@@ -1253,12 +1254,15 @@ def map_sampa_to_ipa(lemme, lemme_df):
     # ordered list: 2-char tokens first, then 1-char
     sampa_ipa_map = {
         'O~': 'ɔ̃', 'E~': 'ɛ̃', 'A~': 'ɑ̃', '9~': 'œ̃',
+        'tS': 'tʃ', 'dZ': 'dʒ', 'gZ': 'gʒ',
         'S': 'ʃ', 'Z': 'ʒ', 'N': 'ŋ', 'R': 'ʁ', 'j': 'j', 'w': 'w', 'H': 'ɥ',
-        '2': 'ø', '9': 'œ', '@': 'ə',
+        '2': 'ø', '8': 'ø', '9': 'œ', '@': 'ə',
         'a': 'a', 'b': 'b', 'd': 'd', 'e': 'e', 'f': 'f', 'g': 'g',
         'i': 'i', 'k': 'k', 'l': 'l', 'm': 'm', 'n': 'n', 'o': 'o',
         'p': 'p', 's': 's', 't': 't', 'u': 'u', 'v': 'v', 'x': 'ks',
-        'y': 'y', 'z': 'z', '~': '̃', '°': '', '§': '',
+        'y': 'y', 'z': 'z',
+        '~': '̃', '°': 'ə', '§': '',
+        '-': '.',
     }
 
     def map_accented_to_ipa(text):
@@ -1297,17 +1301,12 @@ def map_sampa_to_ipa(lemme, lemme_df):
 
     # remove spaces and accents
     sampa = sampa.replace(' ', '')
-    # sampa = map_accented_to_ipa(sampa)
 
     # region build ipa
     ipa = ''
-    if sampa.startswith('°'):
-        ipa += 'ə'  # or '' if you want to ignore it
-        sampa = sampa[1:]
-
     i = 0
     while i < len(sampa):
-        # Try two-character match first (e.g., 'sj', 'Zy')
+        # try 2-character match first
         if i + 1 < len(sampa) and sampa[i:i+2] in sampa_ipa_map:
             ipa += sampa_ipa_map[sampa[i:i+2]]
             i += 2
@@ -1315,11 +1314,30 @@ def map_sampa_to_ipa(lemme, lemme_df):
             ipa += sampa_ipa_map[sampa[i]]
             i += 1
         else:
-            ipa += sampa[i]  # fallback: preserve unknown character
+            ipa += sampa[i]  # fallback
             i += 1
-    # endregion
 
-    return ipa
+    def add_ipa_css_spans(ipa):
+        # add first/last css markup classes
+        split_ipa = ipa.split('.')
+        if len(split_ipa) == 1:
+            split_ipa[0] = f'<span class="ipa_first_syl">{split_ipa[0]}</span>'
+        # elif len(split_ipa) == 2: enable for og formatting
+        #     split_ipa[-1] = f'<span class="ipa_last_syl">{split_ipa[-1]}</span>'
+        elif len(split_ipa) >= 2:
+            split_ipa[0] = f'<span class="ipa_first_syl">{split_ipa[0]}</span>'
+            split_ipa[-1] = f'<span class="ipa_last_syl">{split_ipa[-1]}</span>'
+        ipa = '.'.join(split_ipa)
+
+        # add innermost markup for periods
+        ipa = ipa.replace('.', '<span class="ipa_period">.</span>')
+
+        return ipa
+
+    # add span classes for css coloring (for use in Styling in Anki)
+    ipa = add_ipa_css_spans(ipa)
+
+    return ipa.lower()
 
 
 if __name__ == "__main__":
