@@ -19,9 +19,9 @@ import pandas as pd
 
 
 # ==== CONFIGURATION ====
-# example for alternative directory (works on Nix/Windows), such as to the Desktop
-# user_path = os.path.expanduser('~')
-# DIR_PATH = f'{user_path}/Desktop' # to the user's Desktop
+# example for alternative directory (works on Nix/Windows/Mac OS?)
+USER_PATH = os.path.expanduser('~')
+# DIR_PATH = f'{USER_PATH}/Desktop' # to the user's Desktop
 DIR_PATH = 'resources'
 INPUT_CSV = f'{DIR_PATH}/Lexique383.csv'
 OUTPUT_DIR = f'default_output'
@@ -34,7 +34,7 @@ desired_POS = ['adj', 'ver', 'adv', 'ono', 'prep', 'con', 'n', 'adj:ind']
 
 def main():
     t1 = time.time()
-    clean_lexique()
+    df = clean_lexique()
     t2 = time.time()
     print(f'Filtered lexique in {t2-t1} seconds.')
 
@@ -60,11 +60,12 @@ def clean_lexique():
                        '8_freqlemlivres': 'freqlemlivres',
                        '14_islem': 'islem',
                        '28_orthosyll': 'orthosyll',
-                       '2_phon': 'sampa',
+                       '23_syll': 'sampa',
                        }, inplace=True)
 
     # remove unwanted columns
-    df = df.drop(columns=['9_freqfilms2',
+    df = df.drop(columns=['2_phon',
+                          '9_freqfilms2',
                           '10_freqlivres',
                           '11_infover',
                           '12_nbhomogr',
@@ -77,7 +78,6 @@ def clean_lexique():
                           '20_voisphon',
                           '21_puorth',
                           '22_puphon',
-                          '23_syll',
                           '24_nbsyll',
                           '25_cv-cv',
                           '26_orthrenv',
@@ -223,7 +223,7 @@ def group_dfs_by_lemme(df, df_cols) -> (list, dict):
     lemme_to_df_lookup = {}
     lemme_to_list_lookup = {}
 
-    # iterrows, itertuples, to_dict, and zip all suck roughly equally
+    # optimization note: in practice iterrows, itertuples, to_dict, and zip all suck roughly equally...
     # df_list = df.to_dict(orient='records')
     # for row in df_list:
     #     lemme = row['lemme']
@@ -232,13 +232,13 @@ def group_dfs_by_lemme(df, df_cols) -> (list, dict):
     #         lemme_to_list_lookup[lemme] = []
     #     lemme_to_list_lookup[lemme].append(list(row.values()))
 
-    for c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11 in zip(df['ortho'], df['sampa'], df['lemme'], df['cgram'], df['genre'],
+    for c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11 in zip(df['ortho'], df['lemme'], df['cgram'], df['genre'],
                                        df['nombre'],df['freqlemfilms'], df['freqlemlivres'],
-                                       df['islem'], df['orthosyll'], df['pos_rank']):
-        if c3 not in lemme_to_list_lookup:
-            unique_lemmes.append(c3)
-            lemme_to_list_lookup[c3] = []
-        lemme_to_list_lookup[c3].append([c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11])
+                                       df['islem'], df['sampa'], df['orthosyll'], df['pos_rank']):
+        if c2 not in lemme_to_list_lookup:
+            unique_lemmes.append(c2)
+            lemme_to_list_lookup[c2] = []
+        lemme_to_list_lookup[c2].append([c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11])
 
     for lemme in unique_lemmes:
         lemme_to_df_lookup[lemme] = pd.DataFrame(lemme_to_list_lookup[lemme], columns=df_cols) # 2D axis will convert nicely
