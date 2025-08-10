@@ -3,9 +3,9 @@
 
 @Instructions:
   On the first one START should be run. If you run s3 again you should set START to whatever the
-  highest filename number is plus 1.
+  highest filename number (number to the right of '-') plus 1.
 
-  If you don't do this then df_overflow will be prepended and everything
+  If you don't do this then df_overflow will be prepend to the first file it sees and everything
   will be shifted down by that many rows.. which isn't a huge deal, it just means your frequencies will be
   slightly offset.
 """
