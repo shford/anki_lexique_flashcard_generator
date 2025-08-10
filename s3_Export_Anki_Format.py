@@ -117,7 +117,7 @@ def main():
     muxed_lemmes, muxed_df = mux_frequencies()
 
     # region get starting lemme, index, filename
-    start_lemme = get_start_lemme()
+    start_lemme, deck_id = get_start_lemme()
     mux_start_index = None
     if start_lemme == '':
         mux_start_index = 0
@@ -135,10 +135,10 @@ def main():
     # endregion
 
     # make flashcards
-    chunk_id = 1
     for start_idx in range(mux_start_index, max_cards, CHUNK_SIZE):
         end_idx = start_idx + CHUNK_SIZE
         lemme_chunk = muxed_lemmes[start_idx: end_idx]
+        deck_id += 1
 
         chunk_df = muxed_df[muxed_df['lemme'].isin(lemme_chunk)].copy()
         chunk_df.loc[:, '__order'] = pd.Categorical(chunk_df['lemme'], categories=lemme_chunk, ordered=True)
@@ -146,8 +146,7 @@ def main():
 
         # writes flashcards to file
         print(f'Creating flashcards {start_idx} through {end_idx}.')
-        create_flashcard_rows(lemme_chunk, chunk_df, chunk_id, start_idx, end_idx, deepl_client, deepl_source_language, deepl_target_language, aws_client, aws_src_lang, aws_tgt_lang, foreign_lemme_trans_pairs)
-        chunk_id += 1
+        create_flashcard_rows(lemme_chunk, chunk_df, deck_id, start_idx, end_idx, deepl_client, deepl_source_language, deepl_target_language, aws_client, aws_src_lang, aws_tgt_lang, foreign_lemme_trans_pairs)
 
     # close AWS client
     # aws_client.close()
@@ -155,13 +154,16 @@ def main():
     return
 
 
-def get_start_lemme() -> str:
+def get_start_lemme() -> tuple[str, int]:
     def get_lemme_from_last_row_in_csv(filename):
+        global DECK_GROUPING_PREFIX
         path = f'{ANKI_CSV_OUTPUT_DIR}/{filename}'
         df = pd.read_csv(path, encoding='utf-8', header=None)
         df_last_row = df.iloc[[-1]]
         lemme = str(df_last_row.values[0][0])
-        return lemme
+        deckID_s = str(df_last_row.values[0][7])
+        deckID = int(deckID_s.replace(DECK_GROUPING_PREFIX, ''))
+        return lemme, deckID
 
     highest_anki_file_path = ''
     if os.path.exists(ANKI_CSV_OUTPUT_DIR):
@@ -184,7 +186,7 @@ def get_start_lemme() -> str:
 
             return get_lemme_from_last_row_in_csv(highest_anki_content_filename)
 
-    return ''
+    return '', 0
 
 
 def parse_translations_from_exported_deck() -> dict:
@@ -244,7 +246,7 @@ def parse_translations_from_exported_deck() -> dict:
         return foreign_lemme_translation_lookup
 
 
-def create_flashcard_rows(lemmes, df, chunk_id, start_idx, end_idx,
+def create_flashcard_rows(lemmes, df, deck_id, start_idx, end_idx,
                           deepl_client, deepl_src_lang, deepl_tgt_lang,
                           aws_client, aws_src_lang, aws_tgt_lang,
                           translation_pairs):
@@ -268,7 +270,7 @@ def create_flashcard_rows(lemmes, df, chunk_id, start_idx, end_idx,
         ipa = map_sampa_to_ipa(lemme, lemme_df)
 
         # format 'Noun Declension' field
-        noun_decl = format_noun_declension(lemme, lemme_df, pos, pronunciation, ipa, chunk_id, export_rows, card,
+        noun_decl = format_noun_declension(lemme, lemme_df, pos, pronunciation, ipa, deck_id, export_rows, card,
                                            deepl_client, deepl_src_lang, deepl_tgt_lang, translation_pairs)
         if noun_decl is None:
             continue  # skip this so-called 'lemme' as it's a duplicate entry
@@ -278,7 +280,7 @@ def create_flashcard_rows(lemmes, df, chunk_id, start_idx, end_idx,
         translation = translate(lemme, pos, deepl_client, deepl_src_lang, deepl_tgt_lang, translation_pairs)
 
         # update rows
-        update_export_rows(lemme, pos, noun_decl, pronunciation, ipa, translation, chunk_id, export_rows)
+        update_export_rows(lemme, pos, noun_decl, pronunciation, ipa, translation, deck_id, export_rows)
 
     # write sheet to be imported into Anki
     write_anki_csv(start_idx, end_idx, export_rows)
@@ -1327,7 +1329,7 @@ def map_sampa_to_ipa(lemme, lemme_df):
         'O~': 'ɔ̃', 'E~': 'ɛ̃', 'A~': 'ɑ̃', '9~': 'œ̃',
         'tS': 'tʃ', 'dZ': 'dʒ', 'gZ': 'gʒ',
         'S': 'ʃ', 'Z': 'ʒ', 'N': 'ŋ', 'R': 'ʁ', 'j': 'j', 'w': 'w', 'H': 'ɥ',
-        '2': 'ø', '8': 'ø', '9': 'œ', '@': 'ə',
+        '1': 'ʊ̃', '2': 'ø', '5': 'ɘ', '8': 'ø', '9': 'œ', '@': 'ə',
         'a': 'a', 'b': 'b', 'd': 'd', 'e': 'e', 'f': 'f', 'g': 'g',
         'i': 'i', 'k': 'k', 'l': 'l', 'm': 'm', 'n': 'n', 'o': 'o',
         'p': 'p', 's': 's', 't': 't', 'u': 'u', 'v': 'v', 'x': 'ks',
