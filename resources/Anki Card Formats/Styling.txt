@@ -2,18 +2,22 @@
 :root {
   --text-color: #4a4a4a;
   --pron-color: #4a4a4a;
-  --pos-color: #808080;
+  --ipa-color:  #2c298c;
+  --dot-color:  gray;
+  --pos-color:  #808080;
   --masc-color: #6755f2;
-  --fem-color: #f25555;
+  --fem-color:  #f25555;
 }
 
 
 .night_mode {
   --text-color: #fcfcfc;
   --pron-color: #fcfcfc;
-  --pos-color: #808080;
+  --ipa-color:  lightblue;
+  --dot-color:  white;
+  --pos-color:  #808080;
   --masc-color: #80aaff;
-  --fem-color: #ff8080;
+  --fem-color:  #ff8080;
 }
 
 
@@ -37,7 +41,7 @@
 /* todo replace custom html tag gr w/ span class='gr' and .gr css */
 gr {
   color: var(--pos-color);
-  font-size: 20px;
+  font-size: 0.5em;
 }
 
 
@@ -71,12 +75,35 @@ gr {
   margin-bottom: 12px;
 }
 
+/* Pronunciation + IPA span */
+.pron_ipa {
+  font-size: 1.0em;
+  font-family: sans-serif;
+}
 
 /* Pronunciation */
 .pronunciation {
   /*font-size: 28px;*/
   color: var(--pron-color);
   margin-bottom: 6px;
+}
+
+/* IPA */
+.ipa_col_syl {
+  color: var(--ipa-color);
+  font-weight: 700; /* 700 is the same as bold */
+}
+
+.ipa_first_syl {
+  color: var(--ipa-color);
+}
+
+.ipa_last_syl {
+  color: var(--ipa-color);
+}
+
+.ipa_period {
+  color: var(--dot-color);
 }
 
 
@@ -94,3 +121,4 @@ gr {
 .fem {
   color: var(--fem-color);
 }
+
