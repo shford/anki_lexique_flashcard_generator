@@ -1,5 +1,35 @@
 """
 @Purpose: Mux spoken/written and write to file.
+
+@Instructions:
+  There's no need to run this directly as s3 will call it if you don't. If you do run it,
+  it won't hurt anything, it'll just write the muxed output csv.
+
+  In terms of configuration...
+  You can pretty much just decide you desired spoken/written ratio and desired Anki cards.
+
+  For spoken to written ratio, the db we're generating these cards from labels words by
+  how frequently they appear in different forms (movie subtitles would count toward spoken
+  frequency, books/poems would count towards written).
+
+  If you want to focus more on academic french, I'd recommend
+  increasing the WRITTEN_COUNT.
+
+  If you want to focus on speaking I'd recommend
+  increasing the SPOKEN_COUNT.
+
+  By default it's 400:100, so you'll get Anki decks
+  of size 500 and each deck will the highest
+  80% (400/(400+100)) spoken words and 20% (100/(400+100)) written words.
+
+  You could do 100:0 (100%, 0%), or 475:25 (95%, 5%), or 0:300 (0%, 100%). You can even do really
+  stupid decks like 7:2 which would result in generated deck sizes of 9.
+
+  I'd recommend you choose the default deck size (derived from spoken + written)
+  in relatively small increments and utilize nested subdecks to build a
+  large study deck. This makes it nice so that when you go to add
+  audio w/ HyperTTS, if you get rate limited by whatever plan for whatever provider
+  your using, then you only wasted a relatively small # of API calls before your limit resets.
 """
 # external libs
 import pandas as pd
@@ -10,14 +40,14 @@ from s1_Filter_Lexique import OUTPUT_CSV as INPUT_CSV
 
 
 # ==== CONFIGURATION ====
-SPOKEN_COUNT = 400
-WRITTEN_COUNT = 100
-MUX_CHUNK_SIZE = SPOKEN_COUNT + WRITTEN_COUNT
+SPOKEN_COUNT = 475
+WRITTEN_COUNT = 25
 DESIRED_FLASHCARDS = 20000  # set equal to 0 for all available
 OUTPUT_MUXED_CSV = f'{OUTPUT_DIR}/Lexique383 - Muxed.csv'
 # ========================
 
 # Derived Constants
+MUX_CHUNK_SIZE = SPOKEN_COUNT + WRITTEN_COUNT
 SELECT_N_LEMMES = int(DESIRED_FLASHCARDS * 1.25) # apply fuzz factor
 
 
