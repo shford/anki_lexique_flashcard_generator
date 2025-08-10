@@ -2,7 +2,7 @@
 @Purpose: Filter lexique lemmes (note: additional correction done dynamically in Step 3).
 
 @Instructions:
-  See Github README.
+  See Github README. You should only have to run this program exactly once.
 
 @Note: This is going to be slow-ish. On my machine it took ~1.8 minutes to run.
         But it only needs to run once.
@@ -41,7 +41,6 @@ def main():
     # write filtered .csv
     df.to_csv(OUTPUT_CSV, index=False, encoding='utf-8')
     print(f'Wrote clean .csv file saved to: {OUTPUT_CSV}')
-
 
 def clean_lexique():
     # read in our french dictionary
