@@ -38,8 +38,8 @@
 }
 
 
-/* todo replace custom html tag gr w/ span class='gr' and .gr css */
-gr {
+/* Genre/Nombre ex: 'fs.', 'mpl.', etc... */
+.gn {
   color: var(--pos-color);
   font-size: 0.5em;
 }

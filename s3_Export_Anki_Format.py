@@ -1081,7 +1081,7 @@ def handle_hard_coded_formats(rows, lemme):
         literal_mpl_text = 'les aïeuls'
         figurative_mpl_text = 'les aïeux'
         fs_text = 'la aïeule'
-        return f'{bold_wrapper(lemme)} [<gr><i>ms. </i></gr> {span_wrapper(text=ms_text, is_bold=False, genre='m')}; <gr><i>mpl. (refers to male members of a genealogical tree - literal grandfathers/forefathers)</i></gr> {span_wrapper(text=literal_mpl_text, is_bold=False, genre='m')}; <gr><i>mpl. (refers to collective ancestors regardless of gender even if not from a single literal bloodline)</i></gr> {span_wrapper(text=figurative_mpl_text, is_bold=False, genre='m')}; <gr><i>fs. </i></gr> {span_wrapper(text=fs_text, is_bold=False, genre='f')}; <gr><i>fpl. </i></gr> <i>ommitted - archaic</i>]'
+        return f'{bold_wrapper(lemme)} [<span class=gn><i>ms. </i></span> {span_wrapper(text=ms_text, is_bold=False, genre='m')}; <span class=gn><i>mpl. (refers to male members of a genealogical tree - literal grandfathers/forefathers)</i></span> {span_wrapper(text=literal_mpl_text, is_bold=False, genre='m')}; <span class=gn><i>mpl. (refers to collective ancestors regardless of gender even if not from a single literal bloodline)</i></span> {span_wrapper(text=figurative_mpl_text, is_bold=False, genre='m')}; <span class=gn><i>fs. </i></span> {span_wrapper(text=fs_text, is_bold=False, genre='f')}; <span class=gn><i>fpl. </i></span> <i>ommitted - archaic</i>]'
     # endregion
 
     return None
@@ -1147,9 +1147,9 @@ def ms_fs_bold(lemme, pos, ortho_ms, ortho_fs) -> str:
     if pos == 'n':
         c_male = apply_contraction(f'le {ortho_ms}')
         fs_text = f'la {ortho_fs}'
-        return f'<gr><i>ms. </i></gr> {span_wrapper(text=c_male, is_bold=True, genre='m')}; <gr><i>fs. </i></gr> {span_wrapper(text=fs_text, is_bold=True, genre='f')}'
+        return f'<span class=gn><i>ms. </i></span> {span_wrapper(text=c_male, is_bold=True, genre='m')}; <span class=gn><i>fs. </i></span> {span_wrapper(text=fs_text, is_bold=True, genre='f')}'
     else:
-        return f'<gr><i>ms. </i></gr> {span_wrapper(text=ortho_ms, is_bold=True, genre='m')}; <gr><i>fs. </i></gr> {span_wrapper(text=ortho_fs, is_bold=True, genre='f')}'
+        return f'<span class=gn><i>ms. </i></span> {span_wrapper(text=ortho_ms, is_bold=True, genre='m')}; <span class=gn><i>fs. </i></span> {span_wrapper(text=ortho_fs, is_bold=True, genre='f')}'
         # raise Exception(f'Invalid pos passed to ms_fs_bold() for {lemme}') ??
 
 
@@ -1163,20 +1163,20 @@ def sp_bold(lemme, pos, ortho_s, ortho_p, genre=None) -> str:
             raise Exception('Invalid arguments passed to sp_bold for where pos is nom')
         elif genre == 'm':
             c_male = apply_contraction(f'le {ortho_s}')
-            return f'{span_wrapper(text=c_male, is_bold=True, genre='m')} [<gr><i>pl. </i></gr>{span_wrapper(text=plural_text, is_bold=False, genre='m')}]'
+            return f'{span_wrapper(text=c_male, is_bold=True, genre='m')} [<span class=gn><i>pl. </i></span>{span_wrapper(text=plural_text, is_bold=False, genre='m')}]'
         elif genre == 'f':
             c_fem = apply_contraction(f'la {ortho_s}')
-            return f'{span_wrapper(text=c_fem, is_bold=True, genre='f')} [<gr><i>pl. </i></gr>{span_wrapper(text=plural_text, is_bold=False, genre='f')}]'
+            return f'{span_wrapper(text=c_fem, is_bold=True, genre='f')} [<span class=gn><i>pl. </i></span>{span_wrapper(text=plural_text, is_bold=False, genre='f')}]'
         elif genre == 'ms_fp':
             c_male = apply_contraction(f'le {ortho_s}')
-            return f'{span_wrapper(text=c_male, is_bold=True, genre='m')} [<gr><i>pl. </i></gr>{span_wrapper(text=plural_text, is_bold=False, genre='f')}]'
+            return f'{span_wrapper(text=c_male, is_bold=True, genre='m')} [<span class=gn><i>pl. </i></span>{span_wrapper(text=plural_text, is_bold=False, genre='f')}]'
         elif genre == 'fs_mp':
             c_fem = apply_contraction(f'la {ortho_s}')
-            return f"{span_wrapper(text=c_fem, is_bold=True, genre='f')} [<gr><i>pl. </i></gr>{span_wrapper(text=plural_text, is_bold=False, genre='m')}]"
+            return f"{span_wrapper(text=c_fem, is_bold=True, genre='f')} [<span class=gn><i>pl. </i></span>{span_wrapper(text=plural_text, is_bold=False, genre='m')}]"
         else:
             raise Exception('Invalid genre passed to sp_bold() where pos is nom')
     else:
-        return f'{bold_wrapper(text=lemme)} [<gr><i>pl. </i></gr>{ortho_p}]'
+        return f'{bold_wrapper(text=lemme)} [<span class=gn><i>pl. </i></span>{ortho_p}]'
 
 
 def mpf_det_bold(lemme, pos, ortho_m, ortho_p, ortho_f) -> str:
@@ -1188,9 +1188,9 @@ def mpf_det_bold(lemme, pos, ortho_m, ortho_p, ortho_f) -> str:
         c_male = apply_contraction(f'le {ortho_m}') # ms_text conjuction
         plural_text = f'les {ortho_p}'
         fs_text = f'la {ortho_f}'
-        return f'{span_wrapper(text=c_male, is_bold=True, genre='m')} [<gr><i>pl. </i></gr>{span_wrapper(text=plural_text, is_bold=False, genre='m')}; <gr><i>f. </i></gr>{span_wrapper(text=fs_text, is_bold=False, genre='f')}]'
+        return f'{span_wrapper(text=c_male, is_bold=True, genre='m')} [<span class=gn><i>pl. </i></span>{span_wrapper(text=plural_text, is_bold=False, genre='m')}; <span class=gn><i>f. </i></span>{span_wrapper(text=fs_text, is_bold=False, genre='f')}]'
     else:
-        return f'{bold_wrapper(text=lemme)} [<gr><i>m. </i></gr>{span_wrapper(text=ortho_m, is_bold=False, genre='m')}; <gr><i>pl. </i></gr>{span_wrapper(text=ortho_p, is_bold=False, genre='m')}; <gr><i>f. </i></gr>{span_wrapper(text=ortho_f, is_bold=False, genre='f')}]'
+        return f'{bold_wrapper(text=lemme)} [<span class=gn><i>m. </i></span>{span_wrapper(text=ortho_m, is_bold=False, genre='m')}; <span class=gn><i>pl. </i></span>{span_wrapper(text=ortho_p, is_bold=False, genre='m')}; <span class=gn><i>f. </i></span>{span_wrapper(text=ortho_f, is_bold=False, genre='f')}]'
 
 
 def four_bold(lemme, pos, ortho_ms, ortho_mpl, ortho_fs, ortho_fpl) -> (str|None):
@@ -1205,19 +1205,19 @@ def four_bold(lemme, pos, ortho_ms, ortho_mpl, ortho_fs, ortho_fpl) -> (str|None
         fpl_text = f'les {ortho_fpl}'
         return (
             f'{bold_wrapper(text=lemme)} ['
-            f'<gr><i>ms. </i></gr> {span_wrapper(text=ms_text, is_bold=False, genre='m')}; '
-            f'<gr><i>mpl. </i></gr> {span_wrapper(text=mpl_text, is_bold=False, genre='m')}; '
-            f'<gr><i>fs. </i></gr> {span_wrapper(text=fs_text, is_bold=False, genre='f')}; '
-            f'<gr><i>fpl. </i></gr> {span_wrapper(text=fpl_text, is_bold=False, genre='f')}'
+            f'<span class=gn><i>ms. </i></span> {span_wrapper(text=ms_text, is_bold=False, genre='m')}; '
+            f'<span class=gn><i>mpl. </i></span> {span_wrapper(text=mpl_text, is_bold=False, genre='m')}; '
+            f'<span class=gn><i>fs. </i></span> {span_wrapper(text=fs_text, is_bold=False, genre='f')}; '
+            f'<span class=gn><i>fpl. </i></span> {span_wrapper(text=fpl_text, is_bold=False, genre='f')}'
             ']'
         )
     elif pos == 'adj':
         return (
             f'{bold_wrapper(text=lemme)} '
-            f'[<gr><i>ms. </i></gr>{span_wrapper(text=ortho_ms, is_bold=False, genre='m')}; '
-            f'<gr><i>mpl. </i></gr>{span_wrapper(text=ortho_mpl, is_bold=False, genre='m')}; '
-            f'<gr><i>fs. </i></gr>{span_wrapper(text=ortho_fs, is_bold=False, genre='f')}; '
-            f'<gr><i>fpl. </i></gr>{span_wrapper(text=ortho_fpl, is_bold=False, genre='f')}]'
+            f'[<span class=gn><i>ms. </i></span>{span_wrapper(text=ortho_ms, is_bold=False, genre='m')}; '
+            f'<span class=gn><i>mpl. </i></span>{span_wrapper(text=ortho_mpl, is_bold=False, genre='m')}; '
+            f'<span class=gn><i>fs. </i></span>{span_wrapper(text=ortho_fs, is_bold=False, genre='f')}; '
+            f'<span class=gn><i>fpl. </i></span>{span_wrapper(text=ortho_fpl, is_bold=False, genre='f')}]'
         )
     else:
         return None
