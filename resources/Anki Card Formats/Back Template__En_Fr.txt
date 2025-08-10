@@ -1,4 +1,9 @@
-<div class="noun-declension">{{Noun Declension}}</div>
-<div class="pronunciation">/{{Pronunciation}}/</div>
+<div class="noun-declension">{{Noun_Declension}}</div>
+
+<div class="pron_ipa">
+	<span class="pronunciation">/{{Pronunciation}}/</span>
+	[<span class="">{{IPA}}</span>]
+</div>
+
 <div class="sound">{{Sound}}</div>
 {{FrontSide}}

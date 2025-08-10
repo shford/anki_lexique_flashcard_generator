@@ -1,7 +1,13 @@
 {{FrontSide}}
-<div class="pronunciation">/{{Pronunciation}}/</div>
+
+<div class="pron_ipa">
+	<span class="pronunciation">/{{Pronunciation}}/</span>
+	[<span class="">{{IPA}}</span>]
+</div>
+
 <div class="sound">{{Sound}}</div>
+
 <div class="card-front">
   <span class="pos">{{POS}}. </span>
-  <span class="meaning">{{English Meaning}}</span>
+  <span class="meaning">{{English_Meaning}}</span>
 </div>
