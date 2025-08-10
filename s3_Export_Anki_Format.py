@@ -17,6 +17,7 @@ Design note 2: The Lexique 3.83 excel is usually (not always) sorted such that s
 """
 import os
 import re
+import time
 from ast import literal_eval
 from dataclasses import dataclass
 
@@ -384,19 +385,28 @@ def translate(lemme, pos, deepl_client, deepl_src_lang, deepl_tgt_lang, exported
             return f'{deepl_translation}; {aws_translation}'
 
 
-def deepl_translate(lemme, pos, deepl_client, source_lang, target_language) -> str:
+def deepl_translate(lemme, pos, deepl_client, source_lang, target_language, max_attempts=5) -> str:
     """
     :return: DeepL translation
     """
-    try:
-        deepl_translation = deepl_client.translate_text(lemme, source_lang=source_lang, target_lang=target_language).text
-    except deepl.exceptions.AuthorizationException as e:
-        print('')
+    delay = 1  # seconds
+    for attempt in range(1, max_attempts + 1):
         try:
-            raise Exception(e)
-        finally:
+            deepl_translation = deepl_client.translate_text(lemme, source_lang=source_lang, target_lang=target_language).text
+        except deepl.exceptions.AuthorizationException as e:
             print('')
-            print('DeepL API authorization failure. Ensure correct key from DeepL website (hint: find under "Account->API Keys and Limits") is pasted in resources/deepl_credentials.txt')
+            try:
+                raise Exception(e)
+            finally:
+                print('')
+                print(
+                    'DeepL API authorization failure. Ensure correct key from DeepL website (hint: find under "Account->API Keys and Limits") is pasted in resources/deepl_credentials.txt')
+        except deepl.exceptions.TooManyRequestsException as e:
+            if attempt == max_attempts:
+                raise Exception(e)
+            print(f'429 Too Many Requests — retrying in {delay}s (attempt {attempt})')
+            time.sleep(delay)
+            delay *= 2  # exponential backoff
 
     return deepl_translation.lower()
 
@@ -974,21 +984,31 @@ def row4_func(rows, rs, lemme, pos):
                 # nothing missing
                 return four_bold(lemme, pos, ms.iloc[0]['ortho'], mpl.iloc[0]['ortho'], fs.iloc[0]['ortho'], mpl.iloc[0]['ortho'])
             else:
+                if lemme == 'lapon':
+                    pass
                 # one row missing
                 if (not ms.empty and not mpl.empty and not fs.empty) or (not ms.empty and not mpl.empty and not fpl.empty) or (not ms.empty and not fs.empty and not fpl.empty) or (not mpl.empty and not fs.empty and not fpl.empty):
                     # assign ms|mpl|fs|fpl to row with missing genre/nombre malformed - process of elimination
                     malformed_row = rows[rows['genre'].isna() | rows['nombre'].isna()]
                     if not ms.empty and not mpl.empty and not fs.empty:
                         fpl = malformed_row
+                        if malformed_row.empty:
+                            fpl = mpl
                     elif not ms.empty and not mpl.empty and not fpl.empty:
                         fs = malformed_row
                     elif not ms.empty and not fs.empty and not fpl.empty:
                         mpl = malformed_row
+                        if malformed_row.empty:
+                            mpl = fpl
                     else:
                         ms = malformed_row
 
                     # return corrected value
-                    return four_bold(lemme, pos, ms.iloc[0]['ortho'], mpl.iloc[0]['ortho'], fs.iloc[0]['ortho'], mpl.iloc[0]['ortho'])
+                    ortho_ms = ms.iloc[0]['ortho']
+                    ortho_mpl = mpl.iloc[0]['ortho']
+                    ortho_fs = fs.iloc[0]['ortho']
+                    ortho_fpl = mpl.iloc[0]['ortho']
+                    return four_bold(lemme, pos, ortho_ms, ortho_mpl, ortho_fs, ortho_fpl)
                 # todo could fix infer more fixes, for example if ms and fpl were both missing but there were rows with m_ and _pl
 
     return None
