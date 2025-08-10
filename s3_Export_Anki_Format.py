@@ -1,16 +1,19 @@
 """
 @Purpose: Format lexique to be anki-importable csvs.
 
-Note 1: The formatting for adjectives and nouns is surprisingly inconvenient to fully decouple.
-        I tried but the row functions are still messy. They work pretty well though, mostly
-        through trial and error.
+@Instructions: If you run this you should open s4 and ** CONFIGURE ** and run it after this (s3) completes.
+                For the most part this program will "just work."
 
-Note 2: The Lexique 3.83 excel is usually (not always) sorted such that singular 's' rows
-        come prior to plural 'p' rows even if the 's' and/or 'p' is missing. For that reason
-        depending on what's missing, this code gambles that the pattern will hold true.
+Design note 1: The formatting for adjectives and nouns is surprisingly inconvenient to fully decouple.
+                I tried but the row functions are still messy. They work pretty well though, mostly
+                through trial and error.
+
+Design note 2: The Lexique 3.83 excel is usually (not always) sorted such that singular 's' rows
+                come prior to plural 'p' rows even if the 's' and/or 'p' is missing. For that reason
+                depending on what's missing, this code gambles that the pattern will hold true.
 
         Todo:
-         - Finish implementing AWS Translate function and merging w/ DeepL (service won't active (_(- -)_) so I can't test the dang thing)
+         - Finish implementing AWS Translate function and merging w/ DeepL in translate()... (my account service won't active (_(- -)_) so I can't test the dang thing)
 """
 import os
 import re
@@ -25,15 +28,18 @@ import pandas as pd
 # project files
 from s1_Filter_Lexique import OUTPUT_DIR
 from s2_Mux_Lexique import MUX_CHUNK_SIZE, mux_frequencies, DESIRED_FLASHCARDS
+from s2_Mux_Lexique import MUX_CHUNK_SIZE as CHUNK_SIZE
 from s5_DeNoise_Forvo_Audio import override_prog_configs_from_file
 
 
 # ==== CONFIGURATION ====
+# you probably don't need to change these
+DECK_GROUPING_PREFIX = 'deckID_'    # you can rename this to whatever you want; it's just there to help you group decks/subdecks
+PARSE_CUSTOM_DECK = False           # mostly here for the author, leave as false unless you want to rewrite parse_translations_from_exported_deck() to parse/carryover field values from one of your old decks
 ANKI_CSV_OUTPUT_DIR = f'{OUTPUT_DIR}/anki_lexique_imports'
-OUTPUT_PREFIX = 'anki_deck_'        # recommend setting this to your desired deck name
-CHUNK_SIZE = MUX_CHUNK_SIZE         # you can make this an even multiple if you want to increase the size of your decks
-DECK_GROUPING_PREFIX = f'id_'       # convenient for when it comes to grouping decks; basically a subdeck id
-PARSE_CUSTOM_DECK = False           # mostly here for the author, leave as false unless you want to rewrite parse_translations_from_exported_deck() to transfer your fields instead
+OUTPUT_PREFIX = 'anki_deck_'
+OVERFLOW_FILENAME = f'df_overflow.csv'
+OVERFLOW_PATH = f'{ANKI_CSV_OUTPUT_DIR}/{OVERFLOW_FILENAME}'
 # ========================
 
 # POS priority for sorting and filtering
@@ -101,13 +107,24 @@ def main():
 
     # prep for AWS translations
     aws_access_key_id, aws_secret_access_key = read_aws_creds()
-    # aws_client = boto3.client('translate', region_name='us-east-2', aws_access_key_id=aws_access_key_id, aws_secret_access_key=aws_secret_access_key)
+    # aws_client = boto3.client('translate', region_name='us-east-2', aws_access_key_id=aws_access_key_id, aws_secret_access_key=aws_secret_access_key) # todo
     aws_client = ''
     aws_src_lang = 'en'
     aws_tgt_lang = 'fr'
 
     # get filtered, muxed, lexique lemmes and df
     muxed_lemmes, muxed_df = mux_frequencies()
+
+    # region get starting lemme, index, filename
+    start_lemme = get_start_lemme()
+    mux_start_index = None
+    if start_lemme == '':
+        mux_start_index = 0
+    elif start_lemme in muxed_lemmes:
+        mux_start_index = muxed_lemmes.index(start_lemme) + 1 # +1 to start on the next card
+    else:
+        raise Exception(f'Lemme {start_lemme} from file {ANKI_CSV_OUTPUT_DIR} not present in top {DESIRED_FLASHCARDS} desired muxed cards.')
+    # endregion
 
     # region set desired number of flashcards
     if DESIRED_FLASHCARDS == 0 or DESIRED_FLASHCARDS > len(muxed_df):
@@ -118,7 +135,7 @@ def main():
 
     # make flashcards
     chunk_id = 1
-    for start_idx in range(0, max_cards, CHUNK_SIZE):
+    for start_idx in range(mux_start_index, max_cards, CHUNK_SIZE):
         end_idx = start_idx + CHUNK_SIZE
         lemme_chunk = muxed_lemmes[start_idx: end_idx]
 
@@ -127,6 +144,7 @@ def main():
         chunk_df = chunk_df.sort_values('__order').drop(columns='__order')
 
         # writes flashcards to file
+        print(f'Creating flashcards {start_idx} through {end_idx}.')
         create_flashcard_rows(lemme_chunk, chunk_df, chunk_id, start_idx, end_idx, deepl_client, deepl_source_language, deepl_target_language, aws_client, aws_src_lang, aws_tgt_lang, foreign_lemme_trans_pairs)
         chunk_id += 1
 
@@ -134,6 +152,38 @@ def main():
     # aws_client.close()
 
     return
+
+
+def get_start_lemme() -> str:
+    def get_lemme_from_last_row_in_csv(filename):
+        path = f'{ANKI_CSV_OUTPUT_DIR}/{filename}'
+        df = pd.read_csv(path, encoding='utf-8', header=None)
+        df_last_row = df.iloc[[-1]]
+        lemme = str(df_last_row.values[0][0])
+        return lemme
+
+    highest_anki_file_path = ''
+    if os.path.exists(ANKI_CSV_OUTPUT_DIR):
+        dir_contents = os.listdir(ANKI_CSV_OUTPUT_DIR)
+        if len(dir_contents) > 0:
+            highest_anki_content_filename = ''
+            highest_anki_card = 0
+            lemme = None
+            for content in dir_contents:
+                if 'lock' in content: # ignore temp file lock (such as if a csv is open in a excel/libreoffice)
+                    continue
+
+                if 'overflow' in content:
+                    return get_lemme_from_last_row_in_csv(content)
+
+                high = int(content.split('-')[-1].split('.')[0].strip())
+                if high > highest_anki_card:
+                    highest_anki_content_filename = content
+                    highest_anki_card = high
+
+            return get_lemme_from_last_row_in_csv(highest_anki_content_filename)
+
+    return ''
 
 
 def parse_translations_from_exported_deck() -> dict:
@@ -223,6 +273,7 @@ def create_flashcard_rows(lemmes, df, chunk_id, start_idx, end_idx,
             continue  # skip this so-called 'lemme' as it's a duplicate entry
 
         # assign 'English Translation'
+        print(f'Translating {lemme}')
         translation = translate(lemme, pos, deepl_client, deepl_src_lang, deepl_tgt_lang, translation_pairs)
 
         # update rows
@@ -1220,7 +1271,7 @@ def update_export_rows(lemme, pos, noun_decl, pronunciation, ipa, translation, d
             'Sound': '',
             'Translation': translation,
             'POS': pos,
-            'Deck Id': f'{DECK_GROUPING_PREFIX}_{deck_id}',
+            'Deck Id': f'{DECK_GROUPING_PREFIX}{deck_id}',
             'Tags': '',
         })
 
@@ -1321,12 +1372,12 @@ def map_sampa_to_ipa(lemme, lemme_df):
         # add first/last css markup classes
         split_ipa = ipa.split('.')
         if len(split_ipa) == 1:
-            split_ipa[0] = f'<span class="ipa_first_syl">{split_ipa[0]}</span>'
+            split_ipa[0] = f'<span class="ipa_col_syl">{split_ipa[0]}</span>'
         # elif len(split_ipa) == 2: enable for og formatting
-        #     split_ipa[-1] = f'<span class="ipa_last_syl">{split_ipa[-1]}</span>'
+        #     split_ipa[-1] = f'<span class="ipa_col_syl">{split_ipa[-1]}</span>'
         elif len(split_ipa) >= 2:
-            split_ipa[0] = f'<span class="ipa_first_syl">{split_ipa[0]}</span>'
-            split_ipa[-1] = f'<span class="ipa_last_syl">{split_ipa[-1]}</span>'
+            split_ipa[0] = f'<span class="ipa_col_syl">{split_ipa[0]}</span>'
+            split_ipa[-1] = f'<span class="ipa_col_syl">{split_ipa[-1]}</span>'
         ipa = '.'.join(split_ipa)
 
         # add innermost markup for periods
