@@ -29,7 +29,7 @@ OUTPUT_CSV = f'{OUTPUT_DIR}/Lexique383 - Filtered.csv'
 # ========================
 
 # Globals
-desired_POS = ['adj', 'ver', 'adv', 'ono', 'prep', 'con', 'n', 'adj:ind']
+desired_POS = ['adj', 'v', 'adv', 'ono', 'prep', 'con', 'n', 'adj:ind']
 
 
 def main():
@@ -120,6 +120,7 @@ def clean_lexique():
     df['cgram'] = df['cgram'].str.lower()
 
     # rename some lexique POS fields to preferred
+    df['cgram'] = df['cgram'].replace('ver', 'v')
     df['cgram'] = df['cgram'].replace('nom', 'n')
     df['cgram'] = df['cgram'].replace('pre', 'prep')
 
