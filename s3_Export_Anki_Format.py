@@ -1,8 +1,8 @@
 """
 @Purpose: Format lexique to be anki-importable csvs.
 
-@Instructions: If you run this you should open s4 and ** CONFIGURE ** and run it after this (s3) completes.
-                For the most part this program will "just work."
+@Instructions: s4 is designed to be run after this. You can run s3 any amount of times and
+                then run s4 without any configuration and it will work just fine.
 
 Design note 1: The formatting for adjectives and nouns is surprisingly inconvenient to fully decouple.
                 I tried but the row functions are still messy. They work pretty well though, mostly
@@ -28,7 +28,7 @@ import pandas as pd
 
 # project files
 from s1_Filter_Lexique import OUTPUT_DIR
-from s2_Mux_Lexique import MUX_CHUNK_SIZE, mux_frequencies, DESIRED_FLASHCARDS
+from s2_Mux_Lexique import mux_frequencies, DESIRED_FLASHCARDS
 from s2_Mux_Lexique import MUX_CHUNK_SIZE as CHUNK_SIZE
 from s5_DeNoise_Forvo_Audio import override_prog_configs_from_file
 
@@ -44,7 +44,7 @@ OVERFLOW_PATH = f'{ANKI_CSV_OUTPUT_DIR}/{OVERFLOW_FILENAME}'
 # ========================
 
 # POS priority for sorting and filtering
-POS_PRIORITY = ['adj', 'adv', 'prep', 'ver', 'ono', 'n', 'con']
+POS_PRIORITY = ['adj', 'adv', 'prep', 'v', 'ono', 'n', 'con']
 
 
 @dataclass
@@ -364,7 +364,7 @@ def translate(lemme, pos, deepl_client, deepl_src_lang, deepl_tgt_lang, exported
     # aws_translation = aws_translate(aws_client, lemme, aws_src_lang, aws_tgt_lang)
 
     # handle inconsistent prescence of 'to ' prior to verbs
-    if pos == 'ver':
+    if pos == 'v':
         if len(deepl_translation) > 0:
             if 'to ' not in deepl_translation:
                 # prepend 'to '
@@ -392,6 +392,7 @@ def deepl_translate(lemme, pos, deepl_client, source_lang, target_language, max_
     :return: DeepL translation
     """
     delay = 1  # seconds
+    deepl_translation = ''
     for attempt in range(1, max_attempts + 1):
         try:
             deepl_translation = deepl_client.translate_text(lemme, source_lang=source_lang, target_lang=target_language).text
@@ -401,8 +402,7 @@ def deepl_translate(lemme, pos, deepl_client, source_lang, target_language, max_
                 raise Exception(e)
             finally:
                 print('')
-                print(
-                    'DeepL API authorization failure. Ensure correct key from DeepL website (hint: find under "Account->API Keys and Limits") is pasted in resources/deepl_credentials.txt')
+                print('DeepL API authorization failure. Ensure correct key from DeepL website (hint: find under "Account->API Keys and Limits") is pasted in resources/deepl_credentials.txt')
         except deepl.exceptions.TooManyRequestsException as e:
             if attempt == max_attempts:
                 raise Exception(e)
@@ -487,7 +487,7 @@ def format_noun_declension(lemme, rows, pos, pronunciation, ipa, chunk_idx, expo
             return None
         return noun_decl
 
-    if pos in {'ver', 'adv', 'prep', 'con', 'ono'}:
+    if pos in {'v', 'adv', 'prep', 'con', 'ono'}:
         noun_decl = singular_bold(lemme, pos)
     else:
         num_rows = len(rows)
