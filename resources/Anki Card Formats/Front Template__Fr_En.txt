@@ -1,3 +1,3 @@
 <div class="card-front">
-  <div class="noun-declension">{{Noun Declension}}</div>
+  <div class="noun-declension">{{Noun_Declension}}</div>
 </div>
