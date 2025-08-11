@@ -15,6 +15,7 @@ Design note 2: The Lexique 3.83 excel is usually (not always) sorted such that s
         Todo:
          - Finish implementing AWS Translate function and merging w/ DeepL in translate()... (my account service won't active (_(- -)_) so I can't test the dang thing)
 """
+import copy
 import os
 import re
 import time
@@ -51,6 +52,12 @@ POS_PRIORITY = ['adj', 'adv', 'prep', 'v', 'ono', 'n', 'con']
 class Card:
     def __init__(self, lemme):
         self.lemme = lemme
+        self.pos = ''
+        self.pronunciation = ''
+        self.ipa = ''
+        self.noun_decl = ''
+        self.translation = ''
+        # for intermediate usage
         self.sing = ''
         self.plural = ''
 
@@ -117,8 +124,9 @@ def main():
     muxed_lemmes, muxed_df = mux_frequencies()
 
     # region get starting lemme, index, filename
-    start_lemme, deck_id = get_start_lemme()
+    start_lemme, deck_id, start_file_index = get_start_lemme()
     mux_start_index = None
+
     if start_lemme == '':
         mux_start_index = 0
     elif start_lemme in muxed_lemmes:
@@ -145,7 +153,7 @@ def main():
         chunk_df = chunk_df.sort_values('__order').drop(columns='__order')
 
         # writes flashcards to file
-        print(f'Creating flashcards {start_idx} through {end_idx}.')
+        print(f'Creating flashcards {start_idx+1} - {end_idx+CHUNK_SIZE}.')
         create_flashcard_rows(lemme_chunk, chunk_df, deck_id, start_idx, end_idx, deepl_client, deepl_source_language, deepl_target_language, aws_client, aws_src_lang, aws_tgt_lang, foreign_lemme_trans_pairs)
 
     # close AWS client
@@ -154,7 +162,7 @@ def main():
     return
 
 
-def get_start_lemme() -> tuple[str, int]:
+def get_start_lemme() -> tuple[str, int, int]:
     def get_lemme_from_last_row_in_csv(filename):
         global DECK_GROUPING_PREFIX
         path = f'{ANKI_CSV_OUTPUT_DIR}/{filename}'
@@ -171,22 +179,25 @@ def get_start_lemme() -> tuple[str, int]:
         if len(dir_contents) > 0:
             highest_anki_content_filename = ''
             highest_anki_card = 0
-            lemme = None
+            lemme = ''
+            deckID = 0
             for content in dir_contents:
                 if 'lock' in content: # ignore temp file lock (such as if a csv is open in a excel/libreoffice)
                     continue
 
                 if 'overflow' in content:
-                    return get_lemme_from_last_row_in_csv(content)
+                    lemme, deckID = get_lemme_from_last_row_in_csv(content)
 
                 high = int(content.split('-')[-1].split('.')[0].strip())
                 if high > highest_anki_card:
                     highest_anki_content_filename = content
                     highest_anki_card = high
 
-            return get_lemme_from_last_row_in_csv(highest_anki_content_filename)
+            if highest_anki_content_filename != '' and lemme == '':
+                lemme, deckID = get_lemme_from_last_row_in_csv(highest_anki_content_filename)
+            return lemme, deckID, highest_anki_card
 
-    return '', 0
+    return '', 0, 0
 
 
 def parse_translations_from_exported_deck() -> dict:
@@ -258,29 +269,44 @@ def create_flashcard_rows(lemmes, df, deck_id, start_idx, end_idx,
 
     # populate and write export_rows
     export_rows = []
-    for lemme in lemmes:
+    card_queue = []         # to be done in batches
+    translation_queue = {}  # to be done in batches; structure {'lemme': card_needing_translation, ...}
+    MAX_BATCH_SIZE = 50 # for me this is the DeepL texts limitation, if anyone ever actually looks at this then it'll be the smaller of your AWS/DeepL limitation
+    for i_lemme, lemme in enumerate(lemmes):
         lemme_df = pd.DataFrame(lemme_to_rows[lemme])
         card = Card(lemme)
-        pos = lemme_df['cgram'].iloc[0]
+
+        # pos
+        card.pos = lemme_df['cgram'].iloc[0]
 
         # copy orthosyll column to pronunciation column - use matching lemme orthosyll if available
-        pronunciation = get_pronunciation(lemme, lemme_df)
+        card.pronunciation = get_pronunciation(lemme, lemme_df)
 
         # ipa
-        ipa = map_sampa_to_ipa(lemme, lemme_df)
+        card.ipa = map_sampa_to_ipa(lemme, lemme_df)
 
         # format 'Noun Declension' field
-        noun_decl = format_noun_declension(lemme, lemme_df, pos, pronunciation, ipa, deck_id, export_rows, card,
-                                           deepl_client, deepl_src_lang, deepl_tgt_lang, translation_pairs)
-        if noun_decl is None:
-            continue  # skip this so-called 'lemme' as it's a duplicate entry
+        tmp_noun_decl = format_noun_declension(lemme_df, card_queue, card, deepl_client, deepl_src_lang, deepl_tgt_lang, translation_pairs)
+        if tmp_noun_decl is not None:
+            card.noun_decl = tmp_noun_decl
+            if card.lemme in translation_pairs.keys():
+                card.translation = translation_pairs[lemme]
+            else:
+                translation_queue[card.lemme] = card
+            card_queue.append(card)
 
         # assign 'English Translation'
-        print(f'Translating {lemme}')
-        translation = translate(lemme, pos, deepl_client, deepl_src_lang, deepl_tgt_lang, translation_pairs)
+        if (i_lemme+1) % MAX_BATCH_SIZE == 0 or len(card_queue) == CHUNK_SIZE: # +1 for index, 50 is batch size; do batch translation when full
+            # batch update card translation fields (if needed)
+            if len(list(translation_queue.keys())) > 0:
+                deepl_batch_translate(deepl_client, translation_queue, card_queue, deepl_src_lang, deepl_tgt_lang, translation_pairs)
+                translation_queue = {} # reset translation queue
 
-        # update rows
-        update_export_rows(lemme, pos, noun_decl, pronunciation, ipa, translation, deck_id, export_rows)
+            # batch add card queue to export_rows (ergo card queue no longer needed)
+            for card in card_queue:
+                update_export_rows(card, deck_id, export_rows)
+            card_queue = [] # reset card queue
+            print(f'  Batch up to lemme {i_lemme+1} in memory.')
 
     # write sheet to be imported into Anki
     write_anki_csv(start_idx, end_idx, export_rows)
@@ -350,6 +376,35 @@ def read_deepl_creds():
             exit(-1)
 
 
+def deepl_batch_translate(deepl_client, translation_queue, cards, deepl_src_lang, deepl_tgt_lang, exported_translation_pairs):
+    num_attempts = 0
+    delay = 1
+    translation_keys = list(translation_queue.keys())
+    while True:
+        time.sleep(delay)
+        try:
+            responses = deepl_client.translate_text(translation_keys, source_lang=deepl_src_lang, target_lang=deepl_tgt_lang)
+            # number of translation responses should equal number of items in queue
+            if len(responses) != len(translation_queue):
+                raise Exception('Invalid DeepL response. Source and translation pairs do not match.')
+
+            for i in range(0, len(responses)):
+                response = responses[i]
+                translation = response.text
+                lemme = translation_keys[i]
+                card = translation_queue[lemme]
+
+                # handle inconsistent prescence of 'to ' prior to verbs (and make lowercase)
+                card.translation = standardize_translation(card.pos, translation)
+
+            break
+        except Exception as e:
+            num_attempts += 1
+            if num_attempts > 5:
+                raise
+            delay *= 1.5
+
+
 def translate(lemme, pos, deepl_client, deepl_src_lang, deepl_tgt_lang, exported_translation_pairs) -> (str|None):
     """
     :return: returns target language translation(s) as str, or None if no translations found.
@@ -363,17 +418,11 @@ def translate(lemme, pos, deepl_client, deepl_src_lang, deepl_tgt_lang, exported
     aws_translation = ''
     # aws_translation = aws_translate(aws_client, lemme, aws_src_lang, aws_tgt_lang)
 
-    # handle inconsistent prescence of 'to ' prior to verbs
-    if pos == 'v':
-        if len(deepl_translation) > 0:
-            if 'to ' not in deepl_translation:
-                # prepend 'to '
-                deepl_translation = f'to {deepl_translation}'
-        if len(aws_translation) > 0:
-            if 'to ' not in aws_translation:
-                # prepend 'to '
-                aws_translation = f'to {aws_translation}'
+    # handle inconsistent prescence of 'to ' prior to verbs (and make lowercase)
+    deepl_translation = standardize_translation(pos, deepl_translation)
+    aws_translation = standardize_translation(pos, aws_translation)
 
+    # combine translation as reasonable
     if len(deepl_translation) == 0 and len(aws_translation) == 0:
         return None
     elif len(deepl_translation) == 0:
@@ -385,6 +434,15 @@ def translate(lemme, pos, deepl_client, deepl_src_lang, deepl_tgt_lang, exported
             return deepl_translation
         else:
             return f'{deepl_translation}; {aws_translation}'
+
+
+def standardize_translation(pos, translation):
+    if pos == 'v':
+        if len(translation) > 0:
+            if 'to ' not in translation:
+                # prepend 'to '
+                translation = f'to {translation}'
+    return translation.lower()
 
 
 def deepl_translate(lemme, pos, deepl_client, source_lang, target_language, max_attempts=5) -> str:
@@ -410,7 +468,7 @@ def deepl_translate(lemme, pos, deepl_client, source_lang, target_language, max_
             time.sleep(delay)
             delay *= 2  # exponential backoff
 
-    return deepl_translation.lower()
+    return deepl_translation
 
 
 def TODO_NOT_FINISHED_aws_translate(client, text, src_lang, tgt_lang):
@@ -470,12 +528,13 @@ def parse_start_frequency(filename) -> int:
     return int(match.group(1))
 
 
-def format_noun_declension(lemme, rows, pos, pronunciation, ipa, chunk_idx, export_rows, card,
-                           deepl_client, deepl_src_lang, deepl_tgt_lang, translation_pairs):
+def format_noun_declension(rows, card_queue, card, deepl_client, deepl_src_lang, deepl_tgt_lang, translation_pairs):
     """
     :return: return formatted html as str or return None to continue to next lemme.
     """
     global formatting_exception_count
+    lemme = card.lemme
+    pos = card.pos
 
     # we'll just pre-compute this junk. it's a little inefficient but it reduces code complexity
     row_stats = Row_Stats(rows=rows)
@@ -523,18 +582,24 @@ def format_noun_declension(lemme, rows, pos, pronunciation, ipa, chunk_idx, expo
                                     translation_pairs).replace('the ', '')
 
         if male_translation != fem_translation:
-            m_noun_decl = noun_decl[0]
-            f_noun_decl = noun_decl[1]
-            update_export_rows(lemme, pos, m_noun_decl, pronunciation, ipa, male_translation, chunk_idx, export_rows)
-            update_export_rows(lemme, pos, f_noun_decl, pronunciation, ipa, fem_translation, chunk_idx, export_rows)
+            card_m = card
+            card_f = copy.copy(card)
+            card_m.translation = male_translation
+            card_f.translation = fem_translation
+            card_m.noun_decl = noun_decl[0]
+            card_f.noun_decl = noun_decl[1]
+            # do NOT add to translation queue - already translated!
+            card_queue.append(card_m)
+            card_queue.append(card_f)
             return None  # move to next lemme
         else:
             # correct false positive homo, homo, same lemme diff meaning row_2() conditional -> mpf (probably)
             # _ s
             # _ p
-            noun_decl = mpf_det_bold(lemme, 'n', card.sing, card.plural, card.sing)
-            translation = male_translation.replace('', '')
-            update_export_rows(lemme, pos, noun_decl, pronunciation, ipa, translation, chunk_idx, export_rows)
+            card.noun_decl = mpf_det_bold(lemme, 'n', card.sing, card.plural, card.sing)
+            card.translation = male_translation
+            # do NOT add to translation queue - already translated!
+            card_queue.append(card)
             return None # move to next lemme
 
     return noun_decl
@@ -1111,10 +1176,10 @@ def singular_bold(ortho_s, pos, genre=None) -> str:
         if genre is None:
             raise Exception('Invalid arguments passed to singular_bold() for where pos is nom')
         elif genre == 'm':
-            c_male = apply_contraction(f'le {ortho_s}')
+            c_male = apply_article_elision(f'le {ortho_s}')
             return f'{span_wrapper(text=c_male, is_bold=True, genre='m')}'
         elif genre == 'f':
-            c_fem = apply_contraction(f'la {ortho_s}')
+            c_fem = apply_article_elision(f'la {ortho_s}')
             return f'{span_wrapper(text=c_fem, is_bold=True, genre='f')}'
         else:
             raise Exception('Invalid genre passed to to det function: singular_bold()')
@@ -1145,7 +1210,7 @@ def ms_fs_bold(lemme, pos, ortho_ms, ortho_fs) -> str:
     """
     # shout [grand-papa, grand-mama]
     if pos == 'n':
-        c_male = apply_contraction(f'le {ortho_ms}')
+        c_male = apply_article_elision(f'le {ortho_ms}')
         fs_text = f'la {ortho_fs}'
         return f'<span class=gn><i>ms. </i></span> {span_wrapper(text=c_male, is_bold=True, genre='m')}; <span class=gn><i>fs. </i></span> {span_wrapper(text=fs_text, is_bold=True, genre='f')}'
     else:
@@ -1162,16 +1227,16 @@ def sp_bold(lemme, pos, ortho_s, ortho_p, genre=None) -> str:
         if genre is None:
             raise Exception('Invalid arguments passed to sp_bold for where pos is nom')
         elif genre == 'm':
-            c_male = apply_contraction(f'le {ortho_s}')
+            c_male = apply_article_elision(f'le {ortho_s}')
             return f'{span_wrapper(text=c_male, is_bold=True, genre='m')} [<span class=gn><i>pl. </i></span>{span_wrapper(text=plural_text, is_bold=False, genre='m')}]'
         elif genre == 'f':
-            c_fem = apply_contraction(f'la {ortho_s}')
+            c_fem = apply_article_elision(f'la {ortho_s}')
             return f'{span_wrapper(text=c_fem, is_bold=True, genre='f')} [<span class=gn><i>pl. </i></span>{span_wrapper(text=plural_text, is_bold=False, genre='f')}]'
         elif genre == 'ms_fp':
-            c_male = apply_contraction(f'le {ortho_s}')
+            c_male = apply_article_elision(f'le {ortho_s}')
             return f'{span_wrapper(text=c_male, is_bold=True, genre='m')} [<span class=gn><i>pl. </i></span>{span_wrapper(text=plural_text, is_bold=False, genre='f')}]'
         elif genre == 'fs_mp':
-            c_fem = apply_contraction(f'la {ortho_s}')
+            c_fem = apply_article_elision(f'la {ortho_s}')
             return f"{span_wrapper(text=c_fem, is_bold=True, genre='f')} [<span class=gn><i>pl. </i></span>{span_wrapper(text=plural_text, is_bold=False, genre='m')}]"
         else:
             raise Exception('Invalid genre passed to sp_bold() where pos is nom')
@@ -1185,7 +1250,7 @@ def mpf_det_bold(lemme, pos, ortho_m, ortho_p, ortho_f) -> str:
     """
     if pos == 'n':
         # format: male / plural/ feminine (exists exclusively for nom)
-        c_male = apply_contraction(f'le {ortho_m}') # ms_text conjuction
+        c_male = apply_article_elision(f'le {ortho_m}') # ms_text conjuction
         plural_text = f'les {ortho_p}'
         fs_text = f'la {ortho_f}'
         return f'{span_wrapper(text=c_male, is_bold=True, genre='m')} [<span class=gn><i>pl. </i></span>{span_wrapper(text=plural_text, is_bold=False, genre='m')}; <span class=gn><i>f. </i></span>{span_wrapper(text=fs_text, is_bold=False, genre='f')}]'
@@ -1240,7 +1305,7 @@ def find_row(rows, g, n):
         return r.iloc[0] if not r.empty else None
 
 
-def apply_contraction(text) -> str:
+def apply_article_elision(text) -> str:
     """
     :param text:
     :return: returns formatted article + word (ortho or lemme) w/ (f) if applicable
@@ -1279,20 +1344,17 @@ def get_pronunciation(lemme, lemme_df):
         return lemme_df['orthosyll'].iloc[0]
 
 
-def update_export_rows(lemme, pos, noun_decl, pronunciation, ipa, translation, deck_id, export_rows):
-    if translation is not None:
-        # apply contraction rule to noun_decl
-        noun_decl = apply_contraction(noun_decl)
-
+def update_export_rows(card, deck_id, export_rows):
+    if card.translation is not None:
         # append
         export_rows.append({
-            'Lemme': lemme,
-            'Noun Declension': noun_decl,
-            'Pronunciation': pronunciation,
-            'IPA': ipa,
+            'Lemme': card.lemme,
+            'Noun Declension': card.noun_decl,
+            'Pronunciation': card.pronunciation,
+            'IPA': card.ipa,
             'Sound': '',
-            'Translation': translation,
-            'POS': pos,
+            'Translation': card.translation,
+            'POS': card.pos,
             'Deck Id': f'{DECK_GROUPING_PREFIX}{deck_id}',
             'Tags': '',
         })
