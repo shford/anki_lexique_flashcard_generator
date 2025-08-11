@@ -164,4 +164,5 @@ def check_indices(start, stop):
 
 
 # what if we get to df1 = 2nd to last file and df2 (last file) ends up empty?
-main()
+if __name__ == '__main__':
+    main()
