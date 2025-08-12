@@ -31,7 +31,7 @@ import pandas as pd
 from s1_Filter_Lexique import OUTPUT_DIR
 from s2_Mux_Lexique import mux_frequencies, DESIRED_FLASHCARDS
 from s2_Mux_Lexique import CHUNK_SIZE
-from s6_DeNoise_Forvo_Audio import override_prog_configs_from_file
+from s8_DeNoise_Forvo_Audio import override_prog_configs_from_file
 
 
 # ==== CONFIGURATION ====
