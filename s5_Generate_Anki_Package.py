@@ -1,3 +1,6 @@
+"""
+
+"""
 import os
 
 import pandas as pd
@@ -9,7 +12,7 @@ from s2_Mux_Lexique import DESIRED_FLASHCARDS, CHUNK_SIZE
 from s4_Enforce_500_Anki_Cards import ANKI_CSV_DIR
 from s4_Enforce_500_Anki_Cards import OUTPUT_PREFIX as ANKI_CSV_PREFIX
 
-APKG_DIR = f'default_output/apkg_output'
+PACKAGE_DIR = f'default_output/anki_packages'
 
 
 def main():
@@ -17,10 +20,11 @@ def main():
     uid_counter = [0]
 
     # make .apkg output dir
-    os.makedirs(APKG_DIR, exist_ok=True)
+    os.makedirs(PACKAGE_DIR, exist_ok=True)
 
     # define notetypes
     custom_french_forvo_model = define_custom_french_forvo_model(uid_counter)
+    placeholder_model = define_init_empty_subdecks_placeholder_model(uid_counter)
 
     # init constants to create deck
     l2_counter = 0
@@ -35,7 +39,8 @@ def main():
     # print(l1_deck_name)
     l1_deck_uid = generate_inc_uids(uid_counter)
     l1_deck = genanki.Deck(deck_id=l1_deck_uid, name=l1_deck_name)
-    total_l3_deck_counter = 1
+    total_l3_decks_counter = 1
+    l4_placeholder_deck_counter = 1
     for l2_curr_start in range(1, l2_stop, l2_increment):
         # format l2 (child) deck name
         l2_counter += 1
@@ -53,24 +58,49 @@ def main():
             l3_deck_counter_per_l2_loop += 1
             # print(f'\t\t{l3_deck_name}')
 
-            # populate l3 deck (w/ notes)
+            # create l3 deck (and populate deck w/ notes)
             l3_deck_uid = generate_inc_uids(uid_counter)
             l3_deck = genanki.Deck(deck_id=l3_deck_uid, name=l3_deck_name)
             csv_name = f'{ANKI_CSV_PREFIX}{l3_curr_start} - {l3_curr_end}.csv'
             add_notes_to_deck_from_csv(l3_deck, csv_name, custom_french_forvo_model)
 
-            # save each deck as .apkg
-            package = genanki.Package(l3_deck)
-            package.write_to_file(f'{APKG_DIR}/deck_{total_l3_deck_counter}.apkg')
-            total_l3_deck_counter += 1
-
+            # create 'English to French' and 'French to English' subdecks (req's placeholder note in each)
             en_to_fr_subdeck_name = 'English to French'
             en_to_fr_name = f'{l3_deck_name}::{en_to_fr_subdeck_name}'
+            en_to_fr_uid = generate_inc_uids(uid_counter)
+            en_to_fr_deck = genanki.Deck(deck_id=en_to_fr_uid, name=en_to_fr_name)
+            en_to_fr_fields = [f'En_Fr{l4_placeholder_deck_counter}']
+            add_note_to_deck(placeholder_model, en_to_fr_fields, en_to_fr_deck)
 
             fr_to_en_subdeck_name = 'French to English'
-            fr_to_en_name = f'{l3_deck_name}::{en_to_fr_subdeck_name}'
+            fr_to_en_name = f'{l3_deck_name}::{fr_to_en_subdeck_name}'
+            fr_to_en_uid = generate_inc_uids(uid_counter)
+            fr_to_en_deck = genanki.Deck(deck_id=fr_to_en_uid, name=fr_to_en_name)
+            fr_to_en_fields = [f'Fr_En{l4_placeholder_deck_counter}']
+            add_note_to_deck(placeholder_model, fr_to_en_fields, fr_to_en_deck)
 
+            # save each deck as .apkg
+            l3_package = genanki.Package(l3_deck)
+            en_to_fr_package = genanki.Package(en_to_fr_deck)
+            fr_to_en_package = genanki.Package(fr_to_en_deck)
+            l3_package.write_to_file(f'{PACKAGE_DIR}/deck_{total_l3_decks_counter}.apkg')
+            en_to_fr_package.write_to_file(f'{PACKAGE_DIR}/deck_{en_to_fr_subdeck_name}_{l4_placeholder_deck_counter}.apkg')
+            fr_to_en_package.write_to_file(f'{PACKAGE_DIR}/deck_{fr_to_en_subdeck_name}_{l4_placeholder_deck_counter}.apkg')
+            total_l3_decks_counter += 1
+            l4_placeholder_deck_counter += 1
     return
+
+
+def add_note_to_deck(model, fields, deck, tags=None):
+    # format note
+    note = genanki.Note(
+        model=model,
+        fields=fields,
+        tags=tags
+    )
+
+    # add note to deck
+    deck.add_note(note)
 
 
 def generate_inc_uids(unique: list):
@@ -139,6 +169,26 @@ def define_custom_french_forvo_model(uid_counter):
     return custom_french_forvo_model
 
 
+def define_init_empty_subdecks_placeholder_model(uid_counter):
+    model_uid = generate_inc_uids(uid_counter)
+    custom_french_forvo_model = genanki.Model(
+        model_id=model_uid,
+        name='Placeholder_Model',
+        fields=[
+            {'name': 'Field'},
+        ],
+        templates=[
+            {
+                'name': 'Placeholder_Template',
+                'qfmt': 'Front',
+                'afmt': 'Back',
+            }
+        ],
+    )
+
+    return custom_french_forvo_model
+
+
 def add_notes_to_deck_from_csv(deck, csv_name, custom_french_forvo_model):
     # read csv
     path = f'{ANKI_CSV_DIR}/{csv_name}'
@@ -162,20 +212,17 @@ def add_notes_to_deck_from_csv(deck, csv_name, custom_french_forvo_model):
             if pd.isna(fields[i]):
                 fields[i] = ''
 
+        # rough (untested) format if tags desired... I didn't need them
         # tags = row[8] # needs the form: ['tag1', 'tag2', 'french', 'frequency_1_500']
-        # if pd.isna(tags):
-        #     tags = ''
+        # for i in range(tags):
+        #   if pd.isna(tags[i]):
+        #       tags[i] = ''
+        # add_note_to_deck(custom_french_forvo_model, fields, deck, tags)
 
-        # format note
-        note = genanki.Note(
-            model=custom_french_forvo_model,
-            fields=fields,
-            # tags=tags
-        )
-
-        # add note to deck
-        deck.add_note(note)
+        # adds note to deck (return not needed)
+        add_note_to_deck(custom_french_forvo_model, fields, deck)
     return
+
 
 if __name__ == '__main__':
     main()
