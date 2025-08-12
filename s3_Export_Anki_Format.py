@@ -30,8 +30,8 @@ import pandas as pd
 # project files
 from s1_Filter_Lexique import OUTPUT_DIR
 from s2_Mux_Lexique import mux_frequencies, DESIRED_FLASHCARDS
-from s2_Mux_Lexique import MUX_CHUNK_SIZE as CHUNK_SIZE
-from s5_DeNoise_Forvo_Audio import override_prog_configs_from_file
+from s2_Mux_Lexique import CHUNK_SIZE
+from s6_DeNoise_Forvo_Audio import override_prog_configs_from_file
 
 
 # ==== CONFIGURATION ====
@@ -153,7 +153,7 @@ def main():
         chunk_df = chunk_df.sort_values('__order').drop(columns='__order')
 
         # writes flashcards to file
-        print(f'Creating flashcards {start_idx+1} - {end_idx+CHUNK_SIZE}.')
+        print(f'Creating flashcards {start_idx+1} - {end_idx}.')
         create_flashcard_rows(lemme_chunk, chunk_df, deck_id, start_idx, end_idx, deepl_client, deepl_source_language, deepl_target_language, aws_client, aws_src_lang, aws_tgt_lang, foreign_lemme_trans_pairs)
 
     # close AWS client
@@ -184,14 +184,13 @@ def get_start_lemme() -> tuple[str, int, int]:
             for content in dir_contents:
                 if 'lock' in content: # ignore temp file lock (such as if a csv is open in a excel/libreoffice)
                     continue
-
-                if 'overflow' in content:
+                elif 'overflow' in content:
                     lemme, deckID = get_lemme_from_last_row_in_csv(content)
-
-                high = int(content.split('-')[-1].split('.')[0].strip())
-                if high > highest_anki_card:
-                    highest_anki_content_filename = content
-                    highest_anki_card = high
+                else:
+                    high = int(content.split('-')[-1].split('.')[0].strip())
+                    if high > highest_anki_card:
+                        highest_anki_content_filename = content
+                        highest_anki_card = high
 
             if highest_anki_content_filename != '' and lemme == '':
                 lemme, deckID = get_lemme_from_last_row_in_csv(highest_anki_content_filename)
