@@ -30,8 +30,9 @@ Python files correspond to steps (s1..s5).
 3. Step 3: Generate the files that will be imported into Anki.
 4. Step 4: Even out the number of rows in our exported csv's so that each will make exactly 500 (by default) cards.
 5. Step 5: Package flashcards.
-6. (No file, just manually add audio).
-7. Step 7. Clean audio created by HyperTTS.
+6. Step 6: Import package files into Anki.
+7. (No file for this yet, manually add audio).
+8. Step 7. Clean audio created by HyperTTS.
 
 # Installation / Instructions
 
@@ -40,26 +41,19 @@ Python files correspond to steps (s1..s5).
    - Default output location is under your project location's 'default_output' folder.
 3. Register for DeepL API (free version is fine) and copy your API (auth) key into project_credentials.txt
 4. Register for desired audio API (recommend Forvo API).
-5. Run python files 1 through 4.
-6. Open Anki and add a new Note Type with fields ['Lemma', 'Noun Declension', 'Pronunciation', 'Sound', 'English Meaning', 'POS', Deck Id'].
-   - Select 'Tools'
-   - Select 'Manage Note Types'
-   - Select 'Add'
-   - Select preferred type -recommend: 'Add Basic (and reverse card)'
-   - Enter your Note Type name and select 'Ok'
-   - Close/exit window
-7. In Anki, under tab Decks, create desired Decks via 'Create Deck'.
-8. [Follow guide to import decks from files](https://www.youtube.com/watch?v=_7hMmr0PEPQ)
-9. [Follow guide to add audio from HyperTTS](https://www.youtube.com/watch?v=QYK2GPxksq4)
+5. Configure and run python files steps (s1 through s6).
+6. Open Anki:
+   - To delete placeholder cards: `card:Placeholder_Template`
+   - Move En-Fr inside appropriate deck from parent deck by card type. Same w/ Fr-En.
+7. [Follow guide to add audio from HyperTTS](https://www.youtube.com/watch?v=QYK2GPxksq4)
    - Note: You can use the Forvo API directly as shown below.
      - <i>Hint: Select the 'api:url' field to toggle the url as desired.</i> 
    !['HyperTTS Picture'](hypertts_config.png)
-10. If desired, run python 5 to remove background noise and normalize volume.
-    - Recommended if you chose a hyperTTS audio service that uses human generated clips (i.e. Forvo).
+8. If desired, run s8 to remove background noise and normalize volume.
+    - Recommended if you chose a HyperTTS audio service that uses real recordings (i.e. Forvo).
     - Note: Ensure no targeted audio files are open in other applications.
-11. Close and reopen Anki.
-12. Paste formatting rules from `'resources/Anki Card Formats'` into their respective Card types. The styling will be the same for both Fr to Target Langauge and Target Language to French.
-13. I recommend syncing to AnkiWeb so that your work is backed up. That's it!
+9. Close and reopen Anki.
+10. I recommend syncing to AnkiWeb so that your work is backed up. That's it!
 
 ## Contributing
 
