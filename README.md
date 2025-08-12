@@ -3,12 +3,14 @@
 > 
 ## Getting Started
 
-If you're not familiar with Anki, you should start there:
+If you are not familiar with Anki, you should start here:
+<br>
 [Get latest release](https://github.com/ankitects/anki/releases)
 <br>
 [Register with AnkiWeb (their 'cloud')](https://ankiweb.net/decks)
 
-This project comes bundled with the Lexique and DELA dictionary however they can be found at:<br>
+This project comes bundled with the Lexique and DELA dictionary. However their official projects (with potentially more up-to-date sources) can be found at:
+<br>
 [Lexique](http://www.lexique.org/)
 <br>
 [DELA dictionary](https://infolingu.univ-mlv.fr/DonneesLinguistiques/Dictionnaires/telechargement.html)
@@ -26,10 +28,10 @@ Python files correspond to steps (s1..s5).
 1. Step 1: Filter bogus data from the Lexique.
 2. Step 2: Intermix based on spoken/written frequency and export results into csv files.
 3. Step 3: Generate the files that will be imported into Anki.
-4. Step 4. Even out the number of rows in our exported csv's so that each will make exactly 500 (by default) cards.
-5. Step 5. Clean audio created by hyperTTS.
-
-I'd like to revise this project so that everything could be configured and run from one file, however, that will have to wait.
+4. Step 4: Even out the number of rows in our exported csv's so that each will make exactly 500 (by default) cards.
+5. Step 5: Package flashcards.
+6. (No file, just manually add audio).
+7. Step 7. Clean audio created by HyperTTS.
 
 # Installation / Instructions
 
