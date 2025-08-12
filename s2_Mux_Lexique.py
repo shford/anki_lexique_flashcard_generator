@@ -41,12 +41,12 @@ from s1_Filter_Lexique import OUTPUT_CSV as INPUT_CSV
 # ==== CONFIGURATION ====
 SPOKEN_COUNT = 475
 WRITTEN_COUNT = 25
-DESIRED_FLASHCARDS = 30000  # set equal to 0 for all available
+DESIRED_FLASHCARDS = 32500  # set equal to 0 for all available
 OUTPUT_MUXED_CSV = f'{OUTPUT_DIR}/Lexique383 - Muxed.csv'
 # ========================
 
 # Derived Constants
-MUX_CHUNK_SIZE = SPOKEN_COUNT + WRITTEN_COUNT
+CHUNK_SIZE = SPOKEN_COUNT + WRITTEN_COUNT
 SELECT_N_LEMMES = int(DESIRED_FLASHCARDS * 1.25) # apply fuzz factor
 
 
