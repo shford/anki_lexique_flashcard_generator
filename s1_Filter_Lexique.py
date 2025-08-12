@@ -42,6 +42,7 @@ def main():
     df.to_csv(OUTPUT_CSV, index=False, encoding='utf-8')
     print(f'Wrote clean .csv file saved to: {OUTPUT_CSV}')
 
+
 def clean_lexique():
     # read in our french dictionary
     word_list = parse_dela_dict()
