@@ -46,7 +46,7 @@ def import_anki_packages(start=START):
     print('Importing packages into Anki...')
 
     # get list of packages
-    packages = get_packages()
+    packages = get_packages(start)
 
     # open collection
     collection_anki2_path = get_collection_path(PROFILE)
@@ -76,7 +76,7 @@ def import_anki_packages(start=START):
     return
 
 
-def get_packages():
+def get_packages(start):
     def parse_package_id(pkg_filename):
         matches = list(re.finditer(r'_(\d+)', pkg_filename))
         if matches:
@@ -84,7 +84,7 @@ def get_packages():
         return None
 
     dir_contents = os.listdir(PACKAGE_DIR)
-    import_packages_starting_with_pkgid = math.ceil(START / CHUNK_SIZE)
+    import_packages_starting_with_pkgid = math.ceil(start / CHUNK_SIZE)
 
     packages = []
     for package_name in dir_contents:
