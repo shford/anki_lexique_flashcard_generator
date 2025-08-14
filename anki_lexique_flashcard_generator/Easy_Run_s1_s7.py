@@ -1,30 +1,41 @@
 """
 @Purpose:       Make it easy to run steps 1 through 7.
-                s8 will still need be run after HyperTTS adds audio. See README for details.
+                s8 will still need to be run after HyperTTS adds audio.
+                See README for details.
 
 @Instructions:  Ensure the configurations below are correct. See README for more details.
 
 @Author :       @shford
 """
 from anki_lexique_flashcard_generator.s1_Filter_Lexique import clean_lexique as s1_clean_lexique
-from anki_lexique_flashcard_generator.s2_Mux_Lexique import CHUNK_SIZE
 from anki_lexique_flashcard_generator.s3_Export_Anki_Format import export_anki_format_csvs as s3_export_anki_format_csvs
-from anki_lexique_flashcard_generator.s4_Enforce_500_Anki_Cards import enforce_chunk_size_anki_cards as s4_enforce_chunk_size_anki_cards
+from anki_lexique_flashcard_generator.s4_Enforce_Csv_Num_Rows import enforce_csv_num_rows as s4_enforce_csv_num_rows
 from anki_lexique_flashcard_generator.s5_Generate_Anki_Package import generate_anki_packages as s5_generate_anki_packages
 from anki_lexique_flashcard_generator.s6_Import_Packages_Into_Anki import import_anki_packages as s6_import_anki_packages
 from anki_lexique_flashcard_generator.s7_Organize_Deck import organize_deck as s7_organize_deck
 
 # ==== OVERRIDE CRITICAL CONFIGURATIONS ====
-PROFILE = 'User 1'          # set equal to your Anki profile name
-DESIRED_FLASHCARDS = 32500  # set equal to 0 to create all
+PROFILE = 'User 1'  # set equal to your Anki profile name
+
+"""
+Recommend setting to + CHUNKSIZE the amount you actually want.
+
+So if you want 10000 and CHUNK_SIZE = 500, set DESIRED_FLASHCARDS to 10500.
+Sometimes the Lexique has invalid data. Having an extra file means those rows
+ get shifted up to fill in missing rows during s4. You can always just delete
+the unwanted deck from Anki later.
+
+Set this to 0 to create as many flashcards as possible from your Lexique.
+"""
+DESIRED_FLASHCARDS = 32000
 
 """
 On the first run this should be 1.
 
 Description: For s6 - importing into Anki, makes it so that only package files
               -geq this number are imported. Used when some package files have 
-              already been imported and you don't wish to update or overwrite them.
-
+              already been imported and edited and you don't wish to update or
+              overwrite those changes.
 
 Example for setting this:
   ; in Easy_Run_s1_s7.py
@@ -42,7 +53,7 @@ Example for setting this:
   # packages_to_import contents would be ['Deck_2.apkg', 'Deck_3.apkg']
    
 """
-START = 1                   # import only in filename:
+START = 1        # see block comment
 # ===========================================
 
 
@@ -51,11 +62,8 @@ def main():
 
     df = s1_clean_lexique()
     # no need to run s2 directly, it's called by s3
-    # todo refractor s1 to return group by lemmes/lemme_df and pass to s3 (saves ~8%)
-    desired_flashcards_w_extra = DESIRED_FLASHCARDS + CHUNK_SIZE
-    s3_export_anki_format_csvs(desired_flashcards_w_extra)
-    # todo make s4 import from f2 to f1 if f1 < f2 and no df present; OR consider getting rid df_overflow and just making a new next higher {} - {} file
-    s4_enforce_chunk_size_anki_cards(start=START,stop=desired_flashcards_w_extra)
+    s3_export_anki_format_csvs(DESIRED_FLASHCARDS)
+    s4_enforce_csv_num_rows()
     s5_generate_anki_packages(DESIRED_FLASHCARDS)
     s6_import_anki_packages(start=START)
     s7_organize_deck()
@@ -67,8 +75,9 @@ def start_prompt():
     print('Running easy flashcard generator...')
     print('')
     print('Please verify your profile_name and desired number of flashcards are correct:')
-    print(f'')
-    print(f'')
+    print(f'PROFILE=\'{PROFILE}\'')
+    print(f'DESIRED_FLASHCARDS={DESIRED_FLASHCARDS}')
+    print(f'START={START}')
     verification = input('Please enter yes to continue, or anything else to quit: ').lower()
 
     if not (verification == 'y' or verification == 'yes'):

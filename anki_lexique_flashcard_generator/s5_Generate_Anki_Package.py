@@ -9,8 +9,8 @@ import random
 import genanki
 
 from s2_Mux_Lexique import DESIRED_FLASHCARDS, CHUNK_SIZE
-from s4_Enforce_500_Anki_Cards import ANKI_CSV_DIR
-from s4_Enforce_500_Anki_Cards import OUTPUT_PREFIX as ANKI_CSV_PREFIX
+from s4_Enforce_Csv_Num_Rows import ANKI_CSV_DIR
+from s4_Enforce_Csv_Num_Rows import OUTPUT_PREFIX as ANKI_CSV_PREFIX
 
 PACKAGE_DIR = f'../default_output/anki_packages'
 
