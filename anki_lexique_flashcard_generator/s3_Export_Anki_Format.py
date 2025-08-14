@@ -131,7 +131,7 @@ def export_anki_format_csvs(desired_flashcards=DESIRED_FLASHCARDS) -> None:
     muxed_lemmes, muxed_df = mux_frequencies()
 
     # region get starting lemme, index, filename
-    start_lemme, deck_id, start_file_index = get_start_lemme()
+    start_lemme, deck_id, start_filename = get_start_lemme()
     mux_start_index = None
 
     if start_lemme == '':
@@ -160,8 +160,9 @@ def export_anki_format_csvs(desired_flashcards=DESIRED_FLASHCARDS) -> None:
         chunk_df = chunk_df.sort_values('__order').drop(columns='__order')
 
         # writes flashcards to file
-        print(f'Creating flashcards {start_idx+1} - {end_idx}.')
-        create_flashcard_rows(lemme_chunk, chunk_df, deck_id, start_idx, end_idx, deepl_client, deepl_source_language, deepl_target_language, aws_client, aws_src_lang, aws_tgt_lang, foreign_lemme_trans_pairs)
+        end_filename = start_filename - 1 + CHUNK_SIZE
+        print(f'Creating csv {start_filename} - {end_filename}.')
+        create_flashcard_rows(lemme_chunk, chunk_df, deck_id, start_filename, end_filename, deepl_client, deepl_source_language, deepl_target_language, aws_client, aws_src_lang, aws_tgt_lang, foreign_lemme_trans_pairs)
 
     # close AWS client
     # aws_client.close()
@@ -192,8 +193,6 @@ def get_start_lemme() -> tuple[str, int, int]:
             for content in dir_contents:
                 if 'lock' in content: # ignore temp file lock (such as if a csv is open in a excel/libreoffice)
                     continue
-                elif 'overflow' in content:
-                    lemme, deckID = get_lemme_from_last_row_in_csv(content)
                 else:
                     high = int(content.split('-')[-1].split('.')[0].strip())
                     if high > highest_anki_card:
@@ -202,7 +201,7 @@ def get_start_lemme() -> tuple[str, int, int]:
 
             if highest_anki_content_filename != '' and lemme == '':
                 lemme, deckID = get_lemme_from_last_row_in_csv(highest_anki_content_filename)
-            return lemme, deckID, highest_anki_card
+            return lemme, deckID, highest_anki_card+1
 
     return '', 0, 0
 
@@ -264,7 +263,7 @@ def parse_translations_from_exported_deck() -> dict:
         return foreign_lemme_translation_lookup
 
 
-def create_flashcard_rows(lemmes, df, deck_id, start_idx, end_idx,
+def create_flashcard_rows(lemmes, df, deck_id, start_filename, end_filename,
                           deepl_client, deepl_src_lang, deepl_tgt_lang,
                           aws_client, aws_src_lang, aws_tgt_lang,
                           translation_pairs):
@@ -316,7 +315,7 @@ def create_flashcard_rows(lemmes, df, deck_id, start_idx, end_idx,
             print(f'  Batch up to lemme {i_lemme+1} in memory.')
 
     # write sheet to be imported into Anki
-    write_anki_csv(start_idx, end_idx, export_rows)
+    write_anki_csv(start_filename, end_filename, export_rows)
 
 
 def read_aws_creds():
@@ -1370,7 +1369,7 @@ def update_export_rows(card, deck_id, export_rows):
 def write_anki_csv(start_idx, end_idx, export_rows):
     # output file name
     out_file = os.path.join(
-        ANKI_CSV_OUTPUT_DIR, f'{OUTPUT_PREFIX}{start_idx+1} - {end_idx}.csv'
+        ANKI_CSV_OUTPUT_DIR, f'{OUTPUT_PREFIX}{start_idx} - {end_idx}.csv'
     )
 
     # create DataFrame for export - first row (makes it easier to import into Anki)
