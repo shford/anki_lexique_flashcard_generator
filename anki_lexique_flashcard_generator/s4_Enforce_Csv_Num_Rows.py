@@ -31,7 +31,7 @@ def enforce_csv_num_rows():
     # begin balancing number of rows
     NUM_FILES = len(os.listdir(ANKI_CSV_DIR))
     start = 1
-    while NUM_FILES >= 0:
+    while NUM_FILES >= 1:
         filename_1 = f'{OUTPUT_PREFIX}{start} - {start + CHUNK_SIZE - 1}.csv'
         path1 = f'{ANKI_CSV_DIR}/{filename_1}'
 
