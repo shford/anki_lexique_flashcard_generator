@@ -32,22 +32,22 @@
 """
 # external libs
 import pandas as pd
+from fractions import Fraction
 
 # project files
 from s1_Filter_Lexique import OUTPUT_DIR
 from s1_Filter_Lexique import OUTPUT_CSV as INPUT_CSV
+from s1_Filter_Lexique import DESIRED_FLASHCARDS
 
 
 # ==== CONFIGURATION ====
 SPOKEN_COUNT = 475
 WRITTEN_COUNT = 25
-DESIRED_FLASHCARDS = 32500  # set equal to 0 for all available
 OUTPUT_MUXED_CSV = f'{OUTPUT_DIR}/Lexique383 - Muxed.csv'
 # ========================
 
 # Derived Constants
 CHUNK_SIZE = SPOKEN_COUNT + WRITTEN_COUNT
-SELECT_N_LEMMES = int(DESIRED_FLASHCARDS * 1.25) # apply fuzz factor
 
 
 def main():
@@ -56,7 +56,18 @@ def main():
     print(f'\nDone: Wrote df w/ {len(muxed_lemmes)} intermixed by frequencies of spoken/written.')
 
 
-def mux_frequencies() -> (list, pd.DataFrame):
+def mux_frequencies(desired_flashcards=DESIRED_FLASHCARDS) -> (list, pd.DataFrame):
+    if SPOKEN_COUNT % CHUNK_SIZE == 0 and WRITTEN_COUNT % CHUNK_SIZE == 0:
+        # use percentages for prettiness
+        print(f'Muxing Lexique to be {int(SPOKEN_COUNT / CHUNK_SIZE) * 100}% spoken, {int(WRITTEN_COUNT / CHUNK_SIZE) * 100} written.')
+    else:
+        # use reduced fractions if user is scary
+        print(f'Muxing Lexique to be {Fraction(SPOKEN_COUNT, CHUNK_SIZE)} spoken, {WRITTEN_COUNT, CHUNK_SIZE} written.')
+        print('\tTrite author note: using non-divisible fractions is allowed and will work as expected but is certainly psychotic behavior :)')
+
+    # initiate derived constants inside so they can be overriden by Easy_Run
+    SELECT_N_LEMMES = int(desired_flashcards * 1.25)  # apply fuzz factor
+
     # load csv
     df_all = pd.read_csv(INPUT_CSV, encoding='utf-8')
 
@@ -84,6 +95,8 @@ def mux_frequencies() -> (list, pd.DataFrame):
         if not highest_spoken and not highest_written:
             break  # exhausted candidates
 
+    print('Muxed Lexique.')
+    print()
     return muxed_lemmes, muxed_df
 
 
