@@ -24,36 +24,35 @@ DeepL was chosen for its ease of signup and is free up to certain number usage l
 
 ### Project Structure
 
-Python files correspond to steps (s1..s5).
-1. Step 1: Filter bogus data from the Lexique.
-2. Step 2: Intermix based on spoken/written frequency and export results into csv files.
-3. Step 3: Generate the files that will be imported into Anki.
-4. Step 4: Even out the number of rows in our exported csv's so that each will make exactly 500 (by default) cards.
-5. Step 5: Package flashcards.
-6. Step 6: Import package files into Anki.
-7. (No file for this yet, manually add audio).
-8. Step 7. Clean audio created by HyperTTS.
+Below are the steps this program executes (in files s1..s8).
+
+1. Filter bogus data from the Lexique.
+2. Intermix based on spoken/written frequency and export results into csv files.
+3. Generate the files that will be imported into Anki.
+4. Even out the number of rows in our exported csv's so that each will make exactly 500 (by default) cards.
+5. Package flashcards.
+6. Import package files into Anki.
+7. Organize decks.
+(No file for this yet, manually add audio).
+8. Clean audio created by HyperTTS.
 
 # Installation / Instructions
 
 1. Clone or download this repository.
-2. [Optional] Change default configuration in python files.
-   - Default output location is under your project location's 'default_output' folder.
-3. Register for DeepL API (free version is fine) and copy your API (auth) key into project_credentials.txt
-4. Register for desired audio API (recommend Forvo API).
-5. Configure and run python files steps (s1 through s6).
-6. Open Anki:
-   - To delete placeholder cards: `card:Placeholder_Template`
-   - Move En-Fr inside appropriate deck from parent deck by card type. Same w/ Fr-En.
-7. [Follow guide to add audio from HyperTTS](https://www.youtube.com/watch?v=QYK2GPxksq4)
+2. Register for DeepL API (free version is fine).
+3. Copy your API key into `deepl_credentials.txt`
+4. Register for desired audio API (recommend [Forvo API](https://api.forvo.com])).
+5. Config profile name and desired numbers of flashcards in Easy_Run_s1_s7.py.
+6. Ensure Anki is closed.
+7. Run Easy_Run_s1_s7.py.
+8. [Follow guide to add audio from HyperTTS](https://www.youtube.com/watch?v=QYK2GPxksq4)
    - Note: You can use the Forvo API directly as shown below.
      - <i>Hint: Select the 'api:url' field to toggle the url as desired.</i> 
    !['HyperTTS Picture'](hypertts_config.png)
-8. If desired, run s8 to remove background noise and normalize volume.
+9. Ensure Anki is still closed and no Anki media audio files are open in other applications.
+10. Run s8_DeNoise_Forvo_Audio.py to remove background noise and normalize volume.
     - Recommended if you chose a HyperTTS audio service that uses real recordings (i.e. Forvo).
-    - Note: Ensure no targeted audio files are open in other applications.
-9. Close and reopen Anki.
-10. I recommend syncing to AnkiWeb so that your work is backed up. That's it!
+11. Open Anki. <i>Profitez de vos flashcards d'étude!</i>
 
 ## Contributing
 
