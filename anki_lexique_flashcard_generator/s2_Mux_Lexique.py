@@ -57,13 +57,7 @@ def main():
 
 
 def mux_frequencies(desired_flashcards=DESIRED_FLASHCARDS) -> (list, pd.DataFrame):
-    if SPOKEN_COUNT % CHUNK_SIZE == 0 and WRITTEN_COUNT % CHUNK_SIZE == 0:
-        # use percentages for prettiness
-        print(f'Muxing Lexique to be {int(SPOKEN_COUNT / CHUNK_SIZE) * 100}% spoken, {int(WRITTEN_COUNT / CHUNK_SIZE) * 100} written.')
-    else:
-        # use reduced fractions if user is scary
-        print(f'Muxing Lexique to be {Fraction(SPOKEN_COUNT, CHUNK_SIZE)} spoken, {WRITTEN_COUNT, CHUNK_SIZE} written.')
-        print('\tTrite author note: using non-divisible fractions is allowed and will work as expected but is certainly psychotic behavior :)')
+    print_pretty_mux_start()
 
     # initiate derived constants inside so they can be overriden by Easy_Run
     SELECT_N_LEMMES = int(desired_flashcards * 1.25)  # apply fuzz factor
@@ -107,6 +101,19 @@ def get_top_lemmes(df, count, freq_col_name) -> list:
         .sort_values(by=freq_col_name, ascending=False)['lemme']
         .tolist()[:count]
     )
+
+
+def print_pretty_mux_start():
+    spoken_percentage = (SPOKEN_COUNT / CHUNK_SIZE * 100)
+    written_percentage = (WRITTEN_COUNT / CHUNK_SIZE * 100)
+    if spoken_percentage % 1 == 0 and written_percentage % 1 == 0:
+        # use percentages for prettiness
+        print(f'Muxing Lexique ratio is: {int(spoken_percentage)}% spoken, {int(written_percentage)}% written.')
+    else:
+        # use reduced fractions if user is scary
+        print(f'Muxing Lexique ratio is: {Fraction(SPOKEN_COUNT, CHUNK_SIZE)} spoken, {WRITTEN_COUNT, CHUNK_SIZE} written.')
+        print(
+            '\tTrite author note: using non-divisible fractions is allowed and will work as expected but is certainly psychotic behavior :)')
 
 
 if __name__ == "__main__":
