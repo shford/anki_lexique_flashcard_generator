@@ -39,7 +39,7 @@ from s8_DeNoise_Forvo_Audio import override_prog_configs_from_file
 # you probably don't need to change these
 DECK_GROUPING_PREFIX = 'deckID_'    # you can rename this to whatever you want; it's just there to help you group decks/subdecks
 PARSE_CUSTOM_DECK = False           # mostly here for the author, leave as false unless you want to rewrite parse_translations_from_exported_deck() to parse/carryover field values from one of your old decks
-ANKI_CSV_OUTPUT_DIR = f'{OUTPUT_DIR}/anki_lexique_imports'
+ANKI_CSV_OUTPUT_DIR = f'{OUTPUT_DIR}/anki_csvs'
 OUTPUT_PREFIX = 'anki_deck_'
 OVERFLOW_FILENAME = f'df_overflow.csv'
 OVERFLOW_PATH = f'{ANKI_CSV_OUTPUT_DIR}/{OVERFLOW_FILENAME}'
