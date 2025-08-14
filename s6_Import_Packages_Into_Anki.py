@@ -1,3 +1,9 @@
+"""
+Todo
+  - Remove placeholder templates
+  - Move fr-en and en-fr where they belong
+  - Finalise
+"""
 import os
 import platform
 import time
@@ -28,7 +34,7 @@ def import_anki_package():
     print('Found and read packages.')
 
     # open collection
-    collection_anki2_path = get_collection_anki2_path(PROFILE)
+    collection_anki2_path = get_collection_path(PROFILE)
     print(f'Found {collection_anki2_path}.')
     try:
         collection = Collection(collection_anki2_path)
@@ -52,7 +58,14 @@ def import_anki_package():
     return
 
 
-def get_collection_anki2_path(profile_name):
+def get_collection_path(profile_name, attempts=0):
+    def get_anki_dir(attempts, *anki_dir_tuple):
+        anki_dir_tuple = anki_dir_tuple[attempts:]  # try progressively older locations
+        for path in anki_dir_tuple:
+            if os.path.exists(path):
+                return path
+        raise FileNotFoundError('No anki collection file not found in any of the searched directories.')
+
     collection_anki2_filename = 'collection.anki2'
     system = platform.system()
     profile_dir = ''
@@ -60,31 +73,24 @@ def get_collection_anki2_path(profile_name):
     # get dir - locations may be found at https://docs.ankiweb.net/files.html
     if system == 'Windows':
         modern_dir =        f'{USER_PATH}/AppData/Roaming/%APPDATA%/Anki2/{profile_name}'
-        old_dir =           f'{USER_PATH}/Documents/{profile_dir}'
-        profile_dir = get_anki_dir(modern_dir, old_dir)
+        old_dir =           f'{USER_PATH}/Documents/{profile_name}'
+        profile_dir =       get_anki_dir(attempts, modern_dir, old_dir)
     elif system == 'Linux':
         modern_collection = f'{USER_PATH}/.local/share/Anki2/{profile_name}'
         old_collection =    f'{USER_PATH}/Documents/Anki/{profile_name}'
         older_collection =  f'{USER_PATH}/Anki/{profile_name}'
-        profile_dir = get_anki_dir(modern_collection, old_collection, older_collection)
+        profile_dir =       get_anki_dir(attempts, modern_collection, old_collection, older_collection)
     elif system == 'Darwin':
         modern_collection = f'{USER_PATH}/Library/Application Support/Anki2/{profile_name}'
         old_collection =    f'{USER_PATH}/Documents/Anki/{profile_name}'
-        profile_dir = get_anki_dir(modern_collection, old_collection)
+        profile_dir =       get_anki_dir(attempts, modern_collection, old_collection)
 
     # ensure file exists
     path = f'{profile_dir}/{collection_anki2_filename}'
     if not os.path.exists(path):
-        raise Exception(FileNotFoundError)
+        return get_collection_path(profile_name, attempts+1)
 
     return path
-
-
-def get_anki_dir(*anki_dir_tuple):
-    for path in anki_dir_tuple:
-        if os.path.exists(path):
-            return path
-    raise Exception(FileNotFoundError)
 
 
 if __name__ == '__main__':
