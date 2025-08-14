@@ -57,7 +57,7 @@ Below are the steps this program executes (in files s1..s8).
 ## Contributing
 
 Specific wishlist:
-- Step 5 wraps ffmpeg and ffmpeg-normalize calls with subprocess. These commands are shell commands which are natually platform dependant. Pretty much every subprocess call needs to be replaced with ffmpeg libraries. This would require making Python bindings, importing the modules, and of course translating from the existing commands to the library function calls.
+- Step 8 wraps ffmpeg and ffmpeg-normalize calls with subprocess. These commands are shell commands which are natually platform dependant. Pretty much every subprocess call needs to be replaced with ffmpeg libraries. This would require making Python bindings, importing the modules, and of course translating from the existing commands to the library function calls.
 
 Bug fixes, issue reporting, and PRs are welcome. 
 
