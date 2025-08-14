@@ -12,18 +12,15 @@ import gc
 import os
 import time
 import warnings
-from multiprocessing import Pool, cpu_count
 
 # external library libs
 import pandas as pd
 
-
 # ==== CONFIGURATION ====
-# example for alternative directory (works on Nix/Windows/Mac OS?)
+# you probably don't need to configure these
 DESIRED_FLASHCARDS = 32500 # set equal to 0 for all available
-USER_PATH = os.path.expanduser('~')
-# DIR_PATH = f'{USER_PATH}/Desktop' # to the user's Desktop
-DIR_PATH = 'resources'
+USER_PATH = os.path.expanduser('~') #
+DIR_PATH = 'resources'  # possible alternerative loc: f'{USER_PATH}/Desktop'
 INPUT_CSV = f'{DIR_PATH}/Lexique383.csv'
 OUTPUT_DIR = f'default_output'
 OUTPUT_CSV = f'{OUTPUT_DIR}/Lexique383 - Filtered.csv'
@@ -44,7 +41,7 @@ def main():
     print(f'Wrote clean .csv file saved to: {OUTPUT_CSV}')
 
 
-def clean_lexique():
+def clean_lexique() -> pd.DataFrame:
     print('Filtering Lexique...')
     # read in our french dictionary
     word_list = parse_dela_dict()
