@@ -31,9 +31,12 @@ def enforce_csv_num_rows():
     # begin balancing number of rows
     NUM_FILES = len(os.listdir(ANKI_CSV_DIR))
     start = 1
-    while NUM_FILES >= 1:
+    while NUM_FILES >= 0:
         filename_1 = f'{OUTPUT_PREFIX}{start} - {start + CHUNK_SIZE - 1}.csv'
         path1 = f'{ANKI_CSV_DIR}/{filename_1}'
+
+        if filename_1 == 'anki_deck_31501 - 32000.csv':
+            pass
         if df1 is None:
             df1 = pd.read_csv(path1, encoding='utf-8', header=None)
 
@@ -79,8 +82,6 @@ def enforce_csv_num_rows():
         if NUM_FILES == 1:
             if not df_overflow.empty:
                 df_overflow.to_csv(possible_overflow_path)
-                if possible_overflow_filename is None:
-                    pass
                 print(f'Wrote .csv: {possible_overflow_filename}')
         elif NUM_FILES == 2 and df2.empty and df_overflow.empty:
             # delete empty next file
@@ -92,8 +93,6 @@ def enforce_csv_num_rows():
 
             # write current file
             df1.to_csv(path1, index=False, encoding='utf-8', header=False)
-            if filename_1 is None:
-                pass
             print(f'Wrote .csv: {filename_1}')
 
             # no need for final run
@@ -102,17 +101,13 @@ def enforce_csv_num_rows():
             # raise Exception - balance logic must be broken
             raise Exception("Wha' in tarnation? NUM_FILES==2 and df2.empty but df_overflow is not empty. Balance logic must be broken.")
         elif NUM_FILES == 2 and len(df2) <= CHUNK_SIZE and df_overflow.empty:
-            # write non-empty df2
-            df2.to_csv(path2, index=False, encoding='utf-8', header=False)
-            if filename_2 is None:
-                pass
-            print(f'Wrote .csv: {filename_2}')
-
             # write current file
             df1.to_csv(path1, index=False, encoding='utf-8', header=False)
-            if filename_1 is None:
-                pass
             print(f'Wrote .csv: {filename_1}')
+
+            # write non-empty df2
+            df2.to_csv(path2, index=False, encoding='utf-8', header=False)
+            print(f'Wrote .csv: {filename_2}')
 
             # no need for final run
             break
@@ -120,8 +115,6 @@ def enforce_csv_num_rows():
 
         # write current file
         df1.to_csv(path1, index=False, encoding='utf-8', header=False)
-        if filename_1 is None:
-            pass
         print(f'Wrote .csv: {filename_1}')
 
         # set current to next
