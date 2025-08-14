@@ -1369,9 +1369,7 @@ def update_export_rows(card, deck_id, export_rows):
 
 def write_anki_csv(start_idx, end_idx, export_rows):
     # output file name
-    out_file = os.path.join(
-        ANKI_CSV_OUTPUT_DIR, f'{OUTPUT_PREFIX}{start_idx} - {end_idx}.csv'
-    )
+    out_file = f'{ANKI_CSV_OUTPUT_DIR}/{OUTPUT_PREFIX}{start_idx} - {end_idx}.csv'
 
     # create DataFrame for export - first row (makes it easier to import into Anki)
     export_df = pd.DataFrame(export_rows)
