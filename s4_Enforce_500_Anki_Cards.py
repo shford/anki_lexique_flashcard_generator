@@ -97,7 +97,8 @@ def main():
             # delete overflow if unneeded
             if df_overflow.empty and os.path.exists(OVERFLOW_PATH):
                 os.remove(OVERFLOW_PATH)
-            else:
+
+            if not df_overflow.empty:
                 df_overflow.to_csv(OVERFLOW_PATH, index=False, encoding='utf-8', header=False)
                 print('  Saved overflow file for next run.')
 
