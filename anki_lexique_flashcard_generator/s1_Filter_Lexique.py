@@ -36,10 +36,6 @@ def main():
     t2 = time.time()
     print(f'Filtered lexique in {t2-t1} seconds.')
 
-    # write filtered .csv
-    df.to_csv(OUTPUT_CSV, index=False, encoding='utf-8')
-    print(f'Wrote clean .csv file saved to: {OUTPUT_CSV}')
-
 
 def clean_lexique() -> pd.DataFrame:
     print('Filtering Lexique...')
@@ -129,6 +125,10 @@ def clean_lexique() -> pd.DataFrame:
 
     # filter for highest priority POS
     df = filter_df_for_highest_pos(df)
+
+    # write filtered .csv
+    df.to_csv(OUTPUT_CSV, index=False, encoding='utf-8')
+    print(f'Wrote clean .csv file saved to: {OUTPUT_CSV}')
 
     # return filtered df
     print('Filtered Lexique.')

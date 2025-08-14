@@ -60,7 +60,7 @@ START = 1        # see block comment
 def main():
     start_prompt()
 
-    df = s1_clean_lexique()
+    s1_clean_lexique()
     # no need to run s2 directly, it's called by s3
     s3_export_anki_format_csvs(DESIRED_FLASHCARDS)
     s4_enforce_csv_num_rows()
