@@ -1,5 +1,5 @@
 """
-@Purpose: Ensures each export Anki file has exactly 500 lemmes.
+@Purpose: Ensures each export Anki file has exactly CHUNK_SIZE lemmes.
 
 @Instructions:
   On the first one START should be run. If you run s3 again you should set START to whatever the
@@ -101,7 +101,7 @@ def enforce_chunk_size_anki_cards():
         elif NUM_FILES == 2 and df2.empty:
             # raise Exception - balance logic must be broken
             raise Exception("Wha' in tarnation? NUM_FILES==2 and df2.empty but df_overflow is not empty. Balance logic must be broken.")
-        elif NUM_FILES == 2 and len(df2) <= 500 and df_overflow.empty:
+        elif NUM_FILES == 2 and len(df2) <= CHUNK_SIZE and df_overflow.empty:
             # write non-empty df2
             df2.to_csv(path2, index=False, encoding='utf-8', header=False)
             if filename_2 is None:
