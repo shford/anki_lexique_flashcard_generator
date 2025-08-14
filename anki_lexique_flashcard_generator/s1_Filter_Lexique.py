@@ -127,6 +127,7 @@ def clean_lexique() -> pd.DataFrame:
     df = filter_df_for_highest_pos(df)
 
     # write filtered .csv
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
     df.to_csv(OUTPUT_CSV, index=False, encoding='utf-8')
     print(f'Wrote clean .csv file saved to: {OUTPUT_CSV}')
 
