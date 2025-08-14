@@ -18,7 +18,7 @@ import pandas as pd
 
 # ==== CONFIGURATION ====
 # you probably don't need to configure these
-DESIRED_FLASHCARDS = 32500 # set equal to 0 for all available
+DESIRED_FLASHCARDS = 32000 # set equal to 0 for all available
 USER_PATH = os.path.expanduser('~') #
 DIR_PATH = '../resources'  # possible alternerative loc: f'{USER_PATH}/Desktop'
 INPUT_CSV = f'{DIR_PATH}/Lexique383.csv'

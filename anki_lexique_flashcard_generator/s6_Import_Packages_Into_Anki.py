@@ -23,7 +23,7 @@ from anki.errors import DBError
 from anki.collection import ImportAnkiPackageRequest, Collection
 
 from s2_Mux_Lexique import CHUNK_SIZE
-from s4_Enforce_500_Anki_Cards import START
+from s4_Enforce_Num_Anki_Cards import START
 from s5_Generate_Anki_Package import PACKAGE_DIR
 
 #======== Configuraton ===========
