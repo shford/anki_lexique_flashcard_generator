@@ -20,7 +20,9 @@ def main():
     return
 
 
-def generate_anki_packages():
+def generate_anki_packages(desired_flashcards=DESIRED_FLASHCARDS):
+    print('Generating Anki Packages...')
+
     # init uids counter (to make each seed unique)
     uid_counter = [0]
 
@@ -34,7 +36,7 @@ def generate_anki_packages():
     # init constants to create deck
     l2_counter = 0
     l2_increment = 4000
-    l2_iterations = int(DESIRED_FLASHCARDS / l2_increment)
+    l2_iterations = int(desired_flashcards / l2_increment)
     l2_stop = l2_increment * l2_iterations
 
     # format l1 name/assign uid/ create deck
@@ -88,6 +90,9 @@ def generate_anki_packages():
             fr_to_en_package.write_to_file(f'{PACKAGE_DIR}/deck_{fr_to_en_subdeck_name}_{l4_placeholder_deck_counter}.apkg')
             total_l3_decks_counter += 1
             l4_placeholder_deck_counter += 1
+
+    print('Generated packages.')
+    print()
     return
 
 
