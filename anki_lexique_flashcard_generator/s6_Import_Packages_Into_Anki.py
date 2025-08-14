@@ -1,20 +1,17 @@
 """
 @Purpose: Bulk import packages into Anki.
 
-@Usage:   On the first run no configuration is needed.
+@Usage:   Can be run w/ no configuration on first run through.
 
-          On re-runs, if you wish to to not re-import previous packages
-            you'll need to ensure START in s4_Enforce_500_Anki_Cards is set
-            to 1 more than the last lemme that was .
+          If you've made any changes to previoulsy imported cards in Anki,
+          including adding audio via HyperTTS, then re-importing
+          from packages will overwrite those changes. This is Anki behavior.
 
-          This program assumes that your workflow will be along the lines of
-            s1 -> s2 -> s3 (any number of runs works w/ no configuation)
-            s4 -> s5 -> s6 (first run works w/ no configuration;
-                            afterwards update START in s4 to )
-            s7 (any number of runs - configure PROFILE if not 'User 1')
-            s8 (recommend running exactly once per audio file to avoid degrading audio;
-                  if doing s1->HyperTSS->s8 for x cards and then later do s1->HyperTTS->s8
-                  for y cards then please adjust <TODO>)
+          START is provided as a workaround so that you can bulk import only
+          packages newer than your given file start index.
+
+          See Easy_Run_s1_s7.py config section for more on START.
+
 """
 import math
 import os
