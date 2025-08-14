@@ -16,7 +16,6 @@ Design note 2: The Lexique 3.83 excel is usually (not always) sorted such that s
          - Finish implementing AWS Translate function and merging w/ DeepL in translate()... (my account service won't active (_(- -)_) so I can't test the dang thing)
          - Ugh, just remove the homo, homo, homo 1 -> 2 card code. It wasn't at all worth it.
 """
-import copy
 import os
 import re
 import time
@@ -30,10 +29,9 @@ import pandas as pd
 
 # project files
 from s1_Filter_Lexique import OUTPUT_DIR, DESIRED_FLASHCARDS
-from s2_Mux_Lexique import mux_frequencies
 from s2_Mux_Lexique import CHUNK_SIZE
+from s2_Mux_Lexique import mux_frequencies
 from s8_DeNoise_Forvo_Audio import override_prog_configs_from_file
-
 
 # ==== CONFIGURATION ====
 # you probably don't need to change these
