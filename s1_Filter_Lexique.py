@@ -20,6 +20,7 @@ import pandas as pd
 
 # ==== CONFIGURATION ====
 # example for alternative directory (works on Nix/Windows/Mac OS?)
+DESIRED_FLASHCARDS = 32500 # set equal to 0 for all available
 USER_PATH = os.path.expanduser('~')
 # DIR_PATH = f'{USER_PATH}/Desktop' # to the user's Desktop
 DIR_PATH = 'resources'
@@ -44,6 +45,7 @@ def main():
 
 
 def clean_lexique():
+    print('Filtering Lexique...')
     # read in our french dictionary
     word_list = parse_dela_dict()
 
@@ -132,6 +134,8 @@ def clean_lexique():
     df = filter_df_for_highest_pos(df)
 
     # return filtered df
+    print('Filtered Lexique.')
+    print()
     return df
 
 
