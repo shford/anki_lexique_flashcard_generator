@@ -164,6 +164,9 @@ def export_anki_format_csvs(desired_flashcards=DESIRED_FLASHCARDS) -> None:
         print(f'Creating csv {start_filename} - {end_filename}.')
         create_flashcard_rows(lemme_chunk, chunk_df, deck_id, start_filename, end_filename, deepl_client, deepl_source_language, deepl_target_language, aws_client, aws_src_lang, aws_tgt_lang, foreign_lemme_trans_pairs)
 
+        # increment filename
+        start_filename += CHUNK_SIZE
+
     # close AWS client
     # aws_client.close()
 
@@ -203,7 +206,7 @@ def get_start_lemme() -> tuple[str, int, int]:
                 lemme, deckID = get_lemme_from_last_row_in_csv(highest_anki_content_filename)
             return lemme, deckID, highest_anki_card+1
 
-    return '', 0, 0
+    return '', 0, 1
 
 
 def parse_translations_from_exported_deck() -> dict:
