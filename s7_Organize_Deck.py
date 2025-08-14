@@ -1,3 +1,4 @@
+from anki.errors import NotFoundError as anki_err_NotFoundError
 from anki.collection import Collection
 
 from s6_Import_Packages_Into_Anki import PROFILE
@@ -17,8 +18,14 @@ def organize_deck():
     # delete unwanted Placeholder objects from col (deal w/ genanki wankiness)
     model_names = ['Placeholder_Model', 'Placeholder_Model+']
     for model_name in model_names:
-        notetype_id = col.models.id_for_name(model_name)  # returns NotetypeId
-        col.models.remove(notetype_id)  # -"Delete model, and all its cards/notes."
+        try:
+            notetype_id = col.models.id_for_name(model_name)  # returns NotetypeId
+            if notetype_id is None:
+                continue
+            col.models.remove(notetype_id)  # -"Delete model, and all its cards/notes."
+        except anki_err_NotFoundError:
+            continue
+
 
     # move cards to desired subdecks
     model_name = 'Custom French Forvo'  # presumably this is the NoteType
@@ -34,14 +41,18 @@ def organize_deck():
             # get card
             card = col.get_card(card_id)
 
-            # find appropriate child deck id
+            # find deck of card
             card_deck_id = card.current_deck_id()
             deck = col.decks.get(card_deck_id)
             deck_name = deck['name']
+
+            # skip previously organized cards
+            if tgt_deck_names[tgt] in deck_name:
+                continue
+
+            # update card's deck
             tgt_deck_name = f'{deck_name}::{tgt_deck_names[tgt]}'
             tgt_deck_id = col.decks.id_for_name(tgt_deck_name)  # get_deck_id_by_name
-
-            # change card internals
             col.set_deck([card_id], tgt_deck_id)
 
     # saving is deprecated but it makes me feel safe inside
