@@ -9,14 +9,15 @@
 from anki_lexique_flashcard_generator.s1_Filter_Lexique import clean_lexique as s1_clean_lexique
 from anki_lexique_flashcard_generator.s2_Mux_Lexique import CHUNK_SIZE
 from anki_lexique_flashcard_generator.s3_Export_Anki_Format import export_anki_format_csvs as s3_export_anki_format_csvs
-from anki_lexique_flashcard_generator.s4_Enforce_500_Anki_Cards import enforce_chunk_size_anki_cards as s4_enforce_chunk_size_anki_cards
+from anki_lexique_flashcard_generator.s4_Enforce_Num_Anki_Cards import enforce_chunk_size_anki_cards as s4_enforce_chunk_size_anki_cards
 from anki_lexique_flashcard_generator.s5_Generate_Anki_Package import generate_anki_packages as s5_generate_anki_packages
 from anki_lexique_flashcard_generator.s6_Import_Packages_Into_Anki import import_anki_packages as s6_import_anki_packages
 from anki_lexique_flashcard_generator.s7_Organize_Deck import organize_deck as s7_organize_deck
 
 # ==== OVERRIDE CRITICAL CONFIGURATIONS ====
 PROFILE = 'User 1'          # set equal to your Anki profile name
-DESIRED_FLASHCARDS = 32500  # set equal to 0 to create all
+# DESIRED_FLASHCARDS = 32000  # set equal to 0 to create all
+DESIRED_FLASHCARDS = 34000  # set equal to 0 to create all
 
 """
 On the first run this should be 1.
@@ -42,7 +43,7 @@ Example for setting this:
   # packages_to_import contents would be ['Deck_2.apkg', 'Deck_3.apkg']
    
 """
-START = 1                   # import only in filename:
+START = 10001                   # see block comment
 # ===========================================
 
 
@@ -51,13 +52,12 @@ def main():
 
     df = s1_clean_lexique()
     # no need to run s2 directly, it's called by s3
-    # todo refractor s1 to return group by lemmes/lemme_df and pass to s3 (saves ~8%)
     desired_flashcards_w_extra = DESIRED_FLASHCARDS + CHUNK_SIZE
     s3_export_anki_format_csvs(desired_flashcards_w_extra)
     # todo make s4 import from f2 to f1 if f1 < f2 and no df present; OR consider getting rid df_overflow and just making a new next higher {} - {} file
     s4_enforce_chunk_size_anki_cards(start=START,stop=desired_flashcards_w_extra)
     s5_generate_anki_packages(DESIRED_FLASHCARDS)
-    s6_import_anki_packages(start=START)
+    # s6_import_anki_packages(start=START)
     s7_organize_deck()
 
     print(f'Finished running steps 1-7. {DESIRED_FLASHCARDS} flashcards imported into Anki.')
