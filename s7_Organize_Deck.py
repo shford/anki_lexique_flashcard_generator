@@ -1,3 +1,9 @@
+"""
+@Purpose: Organize Anki decks so that En_Fr and Fr_En card types
+            will go into their appropriate subdecks.
+
+@Usage:   No configuration is needed.
+"""
 from anki.errors import NotFoundError as anki_err_NotFoundError
 from anki.collection import Collection
 
@@ -11,6 +17,8 @@ def main():
 
 
 def organize_deck():
+    print('Organizing Anki decks...')
+
     # initialize collectoin
     col_path = get_collection_path(PROFILE)
     col = Collection(col_path)
@@ -25,7 +33,6 @@ def organize_deck():
             col.models.remove(notetype_id)  # -"Delete model, and all its cards/notes."
         except anki_err_NotFoundError:
             continue
-
 
     # move cards to desired subdecks
     model_name = 'Custom French Forvo'  # presumably this is the NoteType
@@ -58,6 +65,8 @@ def organize_deck():
     # saving is deprecated but it makes me feel safe inside
     col.save()
 
+    print('Organized decks.')
+    print()
     return
 
 
