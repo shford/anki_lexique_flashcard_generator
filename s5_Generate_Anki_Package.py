@@ -16,6 +16,11 @@ PACKAGE_DIR = f'default_output/anki_packages'
 
 
 def main():
+    generate_anki_packages()
+    return
+
+
+def generate_anki_packages():
     # init uids counter (to make each seed unique)
     uid_counter = [0]
 
@@ -32,11 +37,8 @@ def main():
     l2_iterations = int(DESIRED_FLASHCARDS / l2_increment)
     l2_stop = l2_increment * l2_iterations
 
-    # l3_counter = 0
-    l3_stop = l2_increment
     # format l1 name/assign uid/ create deck
     l1_deck_name = 'French Forvo Deck'
-    # print(l1_deck_name)
     l1_deck_uid = generate_inc_uids(uid_counter)
     l1_deck = genanki.Deck(deck_id=l1_deck_uid, name=l1_deck_name)
     total_l3_decks_counter = 1
@@ -47,7 +49,6 @@ def main():
         l2_curr_end = l2_curr_start + l2_increment - 1
         l2_subdeck_name = f'{l2_counter}. Most Comon French Words {l2_curr_start} - {l2_curr_end}'
         l2_deck_name = f'{l1_deck_name}::{l2_subdeck_name}'
-        # print(f'\t{l2_deck_name}')
 
         l3_deck_counter_per_l2_loop = 1
         for l3_curr_start in range(l2_curr_start, l2_curr_start + l2_increment, CHUNK_SIZE):
@@ -56,7 +57,6 @@ def main():
             l3_subdeck_name = f'{l3_label}. Freq {l3_curr_start} - {l3_curr_end}'
             l3_deck_name = f'{l2_deck_name}::{l3_subdeck_name}'
             l3_deck_counter_per_l2_loop += 1
-            # print(f'\t\t{l3_deck_name}')
 
             # create l3 deck (and populate deck w/ notes)
             l3_deck_uid = generate_inc_uids(uid_counter)
