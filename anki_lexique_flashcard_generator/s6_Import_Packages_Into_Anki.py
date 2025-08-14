@@ -23,11 +23,11 @@ from anki.errors import DBError
 from anki.collection import ImportAnkiPackageRequest, Collection
 
 from s2_Mux_Lexique import CHUNK_SIZE
-from s4_Enforce_Num_CSV_Rows import START
 from s5_Generate_Anki_Package import PACKAGE_DIR
 
 #======== Configuraton ===========
-PROFILE = 'User 1'                  # default is 'User 1'; see Anki->File->Switch Profile to see what you have. this is case sensitive
+PROFILE = 'User 1'  # default is 'User 1'; see Anki->File->Switch Profile to see what you have. this is case sensitive
+START = 1           # see @Instructions or Easy_Run_s1_s7.py for info.
 PACKAGE_APKG = 'apkg'
 PACKAGE_COLAPKG = 'colpkg'
 USER_PATH = os.path.expanduser('~')
