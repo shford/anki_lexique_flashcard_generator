@@ -7,6 +7,9 @@
 
 @Author :       @shford
 """
+import os.path
+
+from anki_lexique_flashcard_generator.s1_Filter_Lexique import OUTPUT_CSV
 from anki_lexique_flashcard_generator.s1_Filter_Lexique import clean_lexique as s1_clean_lexique
 from anki_lexique_flashcard_generator.s3_Export_Anki_Format import export_anki_format_csvs as s3_export_anki_format_csvs
 from anki_lexique_flashcard_generator.s4_Enforce_Csv_Num_Rows import enforce_csv_num_rows as s4_enforce_csv_num_rows
@@ -27,7 +30,7 @@ the unwanted deck from Anki later.
 
 Set this to 0 to create as many flashcards as possible from your Lexique.
 """
-DESIRED_FLASHCARDS = 32000
+DESIRED_FLASHCARDS = 32500
 
 """
 On the first run this should be 1.
@@ -60,7 +63,9 @@ START = 1        # see block comment
 def main():
     start_prompt()
 
-    s1_clean_lexique()
+    if not os.path.exists(OUTPUT_CSV):
+        s1_clean_lexique()
+
     # no need to run s2 directly, it's called by s3
     s3_export_anki_format_csvs(DESIRED_FLASHCARDS)
     s4_enforce_csv_num_rows()
