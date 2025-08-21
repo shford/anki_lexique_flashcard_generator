@@ -49,7 +49,7 @@ def generate_anki_packages(desired_flashcards=DESIRED_FLASHCARDS):
         # format l2 (child) deck name
         l2_counter += 1
         l2_curr_end = l2_curr_start + l2_increment - 1
-        l2_subdeck_name = f'{l2_counter}. Most Comon French Words {l2_curr_start} - {l2_curr_end}'
+        l2_subdeck_name = f'{l2_counter}. Words {l2_curr_start} - {l2_curr_end}'
         l2_deck_name = f'{l1_deck_name}::{l2_subdeck_name}'
 
         l3_deck_counter_per_l2_loop = 1
