@@ -34,7 +34,8 @@ Below are the steps this program executes (in files s1..s8).
 6. Import package files into Anki.
 7. Organize decks.
 <br>
-(Manually add audio.).
+(Manually add audio.)
+<br>
 8. Clean audio created by HyperTTS.
 
 # Installation / Instructions
