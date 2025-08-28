@@ -1,15 +1,16 @@
 """
-@Purpose: Provide a variety of free denoising options.
+@Purpose:       Provide a variety of free denoising options.
 
-@Instructions: It is unlikely that you will need to change anything in this file.
-                I'm just going to the leave the best options in main() which will of course write the new files.
+@Instructions:  **It is unlikely that you will need to change anything in this file.**
+                **Just run it exactly once. It will likely take a while, possibly hours.**
+                      Repeated runs data may (read as: will) cause degraded sound quality.
 
-Warning: This will overwrite the old files sound files. However, by default all files will be
-           backed up in collection.media.backup_{timestamp}. If you prefer to disable this
-           option, toggle BACKUP=True to BACKUP=False (NOT RECOMMENDED).
+Warning:        This will overwrite the old files sound files. However, by default all files will be
+                backed up in collection.media.backup_{timestamp}. If you prefer to disable this
+                option, toggle BACKUP=True to BACKUP=False (NOT RECOMMENDED).
 
-           To revert unwanted audio changes, simply delete collection.media and rename the .backup_{timestamp}
-           folder to collection.media
+                To revert unwanted audio changes, simply delete collection.media and rename the .backup_{timestamp}
+                folder to collection.media
 
 A note about ffmpeg-normalize:
     I appreciate that it exists. That said, it's not ffmpeg; it's a wrapper. It seems to work best with .wav files.
@@ -18,10 +19,6 @@ A note about ffmpeg-normalize:
     -
     However, (the old) ffmpeg-normalize version 1.16.0 actually had really good examples and is immortalized on pypi.
     https://pypi.org/project/ffmpeg-normalize/1.16.0/
-
-Additional notes:
-    I would not recommend running this repeatedly as data is lost every time audio is filtered.
-    Repeated runs data may (read as: will) cause degraded sound quality.
 """
 from ast import literal_eval
 import datetime
@@ -34,11 +31,13 @@ from multiprocessing import Pool, cpu_count
 from pathlib import Path
 
 import librosa
-
 # neural nine imports
 import numpy as np
 import soundfile as sf
 from scipy.signal import medfilt
+
+from s6_Import_Packages_Into_Anki import PROFILE
+
 
 # ==== Configuration ====
 BACKUP = True                       # recommend True
@@ -46,6 +45,7 @@ CHECK_FOR_CORRUPT_FILES = True      # recommend True
 RESTORE_CORRUPT_FILES = True        # recommend True; works only if CHECK_FOR_CORRUPT_FILES is True
 WRITE_INTERMEDIATE_FILES = False    # recommend False; True is helpful if you want to manually fine tune what each filter functions
 SELECTED_AUDIO_PREFIX = 'hypertts'  # recommend leave as hypertts for Forvo; otherwise open card and see what your generated file names looks like
+ALT_TXT_IN_AUDIO = '_fr_'           # recommend leave as is; just happens to constant string that works
 # ========================
 
 # Formatting Constants - strongly recommend you do not change DESIRED_
@@ -61,7 +61,7 @@ BYTES_PER_SAMPLE = '2'  # 16-bit = 2 bytes
 
 # Intermediate File Naming Constants (for debugging/fine tuning ffmpeg arguments)
 USER_PATH = os.path.expanduser('~')
-ANKI_DIR = f'{USER_PATH}/.local/share/Anki2/User 1/collection.media'
+ANKI_DIR = f'{USER_PATH}/.local/share/Anki2/{PROFILE}/collection.media'
 PROJECT_NAME = '.anki_lexique_flashcard_generator'
 NEURAL_NINE_PREFIX = 'n9stft_'
 SILENCE_RM_PREFIX='silence_rm_'
@@ -78,9 +78,10 @@ NORMALIZE_PREFIX = 'norm_'
 EQUALIZER_PREFIX = 'final_'
 
 
-corrupt_files = []
 def main():
     override_prog_configs_from_file(globals())
+    corrupt_files_prior = set()
+    corrupt_files_after = set()
 
     t1 = time.time()
     if BACKUP:
@@ -89,12 +90,14 @@ def main():
 
     # populate filenames
     dir_contents = os.listdir(ANKI_DIR)
-    mp3_filenames = [f for f in dir_contents if (os.path.isfile(os.path.join(ANKI_DIR, f)) and SELECTED_AUDIO_PREFIX in f)]
+    hypertts_mp3_filenames = [f for f in dir_contents if (os.path.isfile(os.path.join(ANKI_DIR, f)) and SELECTED_AUDIO_PREFIX in f)]
+    std_forvo_api_mp3_filenames = [f for f in dir_contents if (os.path.isfile(os.path.join(ANKI_DIR, f)) and ALT_TXT_IN_AUDIO in f and WRITE_FORMAT in f and not 'ATTS ' in f)]
+    mp3_filenames = hypertts_mp3_filenames + std_forvo_api_mp3_filenames
 
     if CHECK_FOR_CORRUPT_FILES:
-        print('Checking for corrupt audio files. This may take some time.')
-        num_corrupt_audio_files_prior = get_num_corrupt_audio_files(mp3_filenames)
-        print(f'Prior to running, found {num_corrupt_audio_files_prior} corrupt audio files in directory:\n{ANKI_DIR}.\n')
+        print('Checking for corrupt audio files. This may take some time...')
+        corrupt_files_prior = get_num_corrupt_audio_files_and_attempt_restore(mp3_filenames, corrupt_files_prior)
+        print(f'Prior to running, found {len(corrupt_files_prior)} corrupt audio files in directory:\n{ANKI_DIR}.\n')
 
     # parallelize
     print(f'Executing denoising program on {len(mp3_filenames)} files.\n')
@@ -104,18 +107,14 @@ def main():
     # for filename in mp3_filenames:
     #     process_audio_file(filename)
 
-    if len(corrupt_files) > 0:
-        print('\nDetected the following corrupted audio files during runtime:')
-        [print(c) for c in corrupt_files]
-        print('')
-
     if CHECK_FOR_CORRUPT_FILES:
-        num_corrupt_audio_files_after = get_num_corrupt_audio_files(mp3_filenames)
-        if num_corrupt_audio_files_after != num_corrupt_audio_files_prior:
-            print('\nError detected. Recommend cease use. The cause may be an outside program, but'
-                  ' there are more audio files corrupted after this program executed than before.'
-                  f' Recommend restoring from back at in directory:\n{USER_PATH}/.local/share/Anki2/User 1/\n')
-        print(f'After running: found {num_corrupt_audio_files_after} corrupt audio files in directory:\n{ANKI_DIR}.\n')
+        corrupt_files_after = get_num_corrupt_audio_files_and_attempt_restore(mp3_filenames, corrupt_files_after)
+        newly_corrupted = corrupt_files_after - corrupt_files_prior
+        if len(newly_corrupted) > 0:
+            print('\nDetected the following audio files were corrupted during runtime:')
+            [print(c) for c in newly_corrupted]
+            print(f'Restoration failed. Recommend manual restore from most recent backup:\n\t{USER_PATH}/.local/share/Anki2/{PROFILE}/\n')
+            print()
 
     t2 = time.time()
     print(f'\nWrote {len(mp3_filenames)} new files in {t2-t1} seconds.\n.')
@@ -174,12 +173,12 @@ def backup_audio_collection():
     t = datetime.datetime.now()
     timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
 
-    src_collection = f'{USER_PATH}/.local/share/Anki2/User 1/collection.media'
-    dst_collection = f'{USER_PATH}/.local/share/Anki2/User 1/collection.media.backup_{timestamp}'
+    src_collection = f'{USER_PATH}/.local/share/Anki2/{PROFILE}/collection.media'
+    dst_collection = f'{USER_PATH}/.local/share/Anki2/{PROFILE}/collection.media.backup_{timestamp}'
     shutil.copytree(src_collection, dst_collection, dirs_exist_ok=True) # overwriting is a-okay :)
 
 
-def get_num_corrupt_audio_files(filenames):
+def get_num_corrupt_audio_files_and_attempt_restore(filenames: list, corrupt_files: set):
     bad_files = []
     for filename in filenames:
         path = f'{ANKI_DIR}/{filename}'
@@ -196,7 +195,7 @@ def get_num_corrupt_audio_files(filenames):
             # flag if there are serious decoding errors
             if "Invalid" in stderr or "error" in stderr.lower():
                 print(f'   Found corrupt audio file: {filename}')
-                bad_files.append(path)
+                corrupt_files.add(filename)
 
                 # attempts to restore corrupt files from most recent backup
                 if RESTORE_CORRUPT_FILES:
@@ -206,12 +205,12 @@ def get_num_corrupt_audio_files(filenames):
                             shutil.copy(f'{backup_dir}/{filename}', path)
                             print(f'   Restored corrupt file from backup.')
                             print('')
-                            bad_files.pop()
+                            corrupt_files.remove(filename)
                         except:
                             print(f'   Failed to restore corrupt file from backup.')
                             print('')
 
-    return len(bad_files)
+    return corrupt_files
 
 
 def get_newest_backup_dir(backup_parent_dir, restore_from_oldest_backup=False):
@@ -228,10 +227,17 @@ def get_newest_backup_dir(backup_parent_dir, restore_from_oldest_backup=False):
 def process_audio_file(filename):
     # read audio file into required format
     filepath = f'{ANKI_DIR}/{filename}'
-    pcm_bytes = _read_audiofile_to_pcm_bytes(filepath)
-    if pcm_bytes is None:
-        corrupt_files.append(filename)
+    pcm_bytes = _read_audiofile_to_pcm_bytes(filepath) # note len is in bytes
+    if pcm_bytes is None or len(pcm_bytes) < 1024: # too short files are most likely malformed
         return # don't continue processing corrupt files
+
+    # file is not corrupt, but is most likely AI generated, so no
+    # filtering necessary. these sizes were determined by manually
+    # examining file sizes of azure voices. From what I saw, no
+    # recorded voices from ~30k Forvo clips fall within this size range
+    # and all AI voices did.
+    if (1024 * 16 + 1) < len(pcm_bytes) < (1024 * 30.8 + 1):
+        return
 
     # clean up audio using ffmpeg wrappers
     pcm_bytes = audio_chain(pcm_bytes, filename)
