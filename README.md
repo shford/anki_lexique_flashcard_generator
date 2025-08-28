@@ -32,7 +32,7 @@ Below are the steps this program executes (in files s1..s8).
 4. Even out the number of rows in our exported csv's so that each will make exactly 500 (by default) cards.
 5. Create packages flashcards using `genanki`.
 6. Import package files into Anki.
-7. Organize decks.
+7. Organize decks.<br>
 (Manually add audio.).
 8. Clean audio created by HyperTTS.
 
