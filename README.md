@@ -50,7 +50,7 @@ Below are the steps this program executes (in files s1..s8).
 8. [Follow guide to add audio from HyperTTS](https://www.youtube.com/watch?v=QYK2GPxksq4)
    - Note: You can use the Forvo API directly as shown below.
      - <i>Hint: Select the 'api:url' field to toggle the url as desired.</i> 
-        <img width="510" height="749" alt="Image" src="https://private-user-images.githubusercontent.com/28375705/483020201-90a27b2e-1f10-4176-bcc3-f5a5c063741e.png?jwt=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSIsImtleSI6ImtleTUiLCJleHAiOjE3NTYzNjYzOTgsIm5iZiI6MTc1NjM2NjA5OCwicGF0aCI6Ii8yODM3NTcwNS80ODMwMjAyMDEtOTBhMjdiMmUtMWYxMC00MTc2LWJjYzMtZjVhNWMwNjM3NDFlLnBuZz9YLUFtei1BbGdvcml0aG09QVdTNC1ITUFDLVNIQTI1NiZYLUFtei1DcmVkZW50aWFsPUFLSUFWQ09EWUxTQTUzUFFLNFpBJTJGMjAyNTA4MjglMkZ1cy1lYXN0LTElMkZzMyUyRmF3czRfcmVxdWVzdCZYLUFtei1EYXRlPTIwMjUwODI4VDA3MjgxOFomWC1BbXotRXhwaXJlcz0zMDAmWC1BbXotU2lnbmF0dXJlPTc4YjJkYzhiMmZmNTdkMTI2MDdlZmE1NGMzYTA3OGRlMTNjYjZiMDgzN2M0YzMzNTQ2ZTkxYTUzYmU0OTk5ODImWC1BbXotU2lnbmVkSGVhZGVycz1ob3N0In0.0SMf-dEChvjZXLJu5W9fhtCjbxtp2xxRvqUZqI52z1U" width=10% height=10%>
+        !['HyperTTS Picture'](hypertts_config.png)
 
 9. Ensure Anki is still closed and no Anki media audio files are open in other applications.
 10. Run s8_DeNoise_Forvo_Audio.py to remove background noise and normalize volume.
