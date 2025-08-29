@@ -61,7 +61,7 @@ Below are the steps this program executes (in files s1..s8).
 
 Bug fixes, issue reporting, and PRs are welcome. 
 
-If you're really eager to help, s8 wraps ffmpeg and ffmpeg-normalize calls with subprocess. These commands are shell commands which are natually platform dependant and have a lot of overhead. All that could be replcaed with the ffmpeg library with a little Python function binding.
+If you're really eager to help, s8 wraps ffmpeg and ffmpeg-normalize calls with subprocess. These commands are shell commands which are natually platform dependant and have a lot of overhead. All that could be replaced with the ffmpeg library with a little Python function binding.
 
 
 ## Licensing/Resources
