@@ -55,7 +55,6 @@ Below are the steps this program executes (in files s1..s8).
 9. Ensure Anki is still closed and no Anki media audio files are open in other applications.
 10. Run s8_DeNoise_Forvo_Audio.py to remove background noise and normalize volume.
     - Recommended if you chose an audio service that uses real recordings (i.e. Forvo).
-11. Open Anki. <i>Profitez de vos flashcards d'étude!</i>
 
 ## Contributing
 
@@ -66,32 +65,17 @@ If you're really eager to help, s8 wraps ffmpeg and ffmpeg-normalize calls with 
 
 ## Licensing/Resources
 
-This project utilizes the Lexique 3.83 corpus and DELA dictionary.
+This project utilizes the Lexique and DELA dictionary. Aside from the inclusion of these projects for convenience, it is not a derivative project of either work, although its output as is will generate derivative works.
 
-### Lexique 
-Any flashcards generated using the Lexique fall under its derivative licensing. This project itself is not a derivative work.
+<sub>1. Any flashcards generated using the Lexique fall under its derivative license, [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/). This project complies with the Lexique Project's license, makes changes to the Lexique in a reasonable manner, and acknowledges that "in no way does this use suggest that the licensor endorses this project's creator(s) or their use."</sub>
 
-#### [Attribution-NonCommercial 4.0 International Licensing Info](https://creativecommons.org/licenses/by-nc/4.0/):
-###### Commercial Use
+<sub>2. This project packages the original inflected form of the DELA French dictionary provided by the former Laboratoire d'Automatique Documentaire et Linguistique (LADL), now integrated into Institut Gaspard Monge (IGM) of the Université Gustave Eiffel which uses the [LGPLLR]((https://infolingu.univ-mlv.fr/DonneesLinguistiques/Lexiques-Grammaires/lgpllr.html)) license.</sub>
+
+###### Lexique Restriction on Commercial Use of Derivative Works
 > "The Lexique and its derivative works "may not [be used]... for commercial purposes."
-###### Required Credit
-> "This project hereby provides credit to the Lexique project, provides a link to its license, and states that the this project will make changes to the Lexique in a reasonable manner in compliance with its license and acknowledges that in no way does this use suggest that the licensor endorses this project's creator(s) or their use."
-
-### DELA French dictionary
-This project includes the DELA French dictionary for convenience. Otherwise this project itself is not a derivative work.
-> Paragraph 3 of the LGPLLR: "...by reading it or being compiled or linked with it, is called a "work that uses the Linguistic Resource". Such a work, in isolation, is not a derivative work of the Linguistic Resource, and therefore falls outside the scope of this License."
-
-
-#### [Lesser General Public License For Linguistic Resources Licensing Info](https://infolingu.univ-mlv.fr/DonneesLinguistiques/Lexiques-Grammaires/lgpllr.html):
-
-###### Commercial Use
-No generated data is actually directly derivative of this resource therefore no commercial restrictions exist on account of this resource.
-
-###### Required Credit
-This project packages the original inflected form of the DELA French dictionary provided by the former Laboratoire d'Automatique Documentaire et Linguistique (LADL), now integrated into Institut Gaspard Monge (IGM) of the Université Gustave Eiffel which uses the LGPLLR license.
 
 ## Meta
-Distributed under the MIT license and derivative licenses where applicable.
+Distributed under the MIT license. Derivative licenses linked as required.
 
 ## Disclaimer
 This software is provided "as is", without warranty of any kind, express or implied, including but not limited to the warranties of merchantability, fitness for a particular purpose, and noninfringement. In no event shall the authors or copyright holders be liable for any claim, damages, or other liability, whether in an action of contract, tort, or otherwise, arising from, out of, or in connection with the software or the use or other dealings in the software.
