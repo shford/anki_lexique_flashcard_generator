@@ -20,7 +20,6 @@ A note about ffmpeg-normalize:
     However, (the old) ffmpeg-normalize version 1.16.0 actually had really good examples and is immortalized on pypi.
     https://pypi.org/project/ffmpeg-normalize/1.16.0/
 """
-from ast import literal_eval
 import datetime
 import io
 import os
@@ -37,6 +36,7 @@ import soundfile as sf
 from scipy.signal import medfilt
 
 from s6_Import_Packages_Into_Anki import PROFILE
+from override_settings_from_config import *
 
 
 # ==== Configuration ====
@@ -46,6 +46,7 @@ RESTORE_CORRUPT_FILES = True        # recommend True; works only if CHECK_FOR_CO
 WRITE_INTERMEDIATE_FILES = False    # recommend False; True is helpful if you want to manually fine tune what each filter functions
 SELECTED_AUDIO_PREFIX = 'hypertts'  # recommend leave as hypertts for Forvo; otherwise open card and see what your generated file names looks like
 ALT_TXT_IN_AUDIO = '_fr_'           # recommend leave as is; just happens to constant string that works
+TEST = False                        # recommend False; this feels pretty self-explanatory
 # ========================
 
 # Formatting Constants - strongly recommend you do not change DESIRED_
@@ -58,6 +59,7 @@ DESIRED_CHANNELS = '1'
 DESIRED_FORMAT = 's16le'
 DESIRED_CODEC = 'pcm_s16le'
 BYTES_PER_SAMPLE = '2'  # 16-bit = 2 bytes
+LUFS_NORMALIZATION_LEVEL = -12 # was -16, whisperers still too quiet
 
 # Intermediate File Naming Constants (for debugging/fine tuning ffmpeg arguments)
 USER_PATH = os.path.expanduser('~')
@@ -94,6 +96,18 @@ def main():
     std_forvo_api_mp3_filenames = [f for f in dir_contents if (os.path.isfile(os.path.join(ANKI_DIR, f)) and ALT_TXT_IN_AUDIO in f and WRITE_FORMAT in f and not 'ATTS ' in f)]
     mp3_filenames = hypertts_mp3_filenames + std_forvo_api_mp3_filenames
 
+    if TEST:
+        handpicked_trouble_files = ['abatteur_fr_canada.mp3',
+                             'abduction_fr_canada.mp3',
+                             'hypertts-abfa294bc860ee1de8562f87fde34ba3bc64b04951d63e978b466f59.mp3', # corps
+                             'hypertts-b68f18b7fbb001873cbfa7c5126deaed887b582899e1db4b5d38dd96.mp3', # oeil
+                             'hypertts-10c727621af59dc093fd4ff5131409910f1b98deec972ba4644ca509.mp3', # problème
+                             'hypertts-d2f1e3f45ee9bf07b026f6aac11416911c0552ffe2d94de867550379.mp3', # comprendre
+                             'hypertts-f7a0c40d2fe7800b2a6c9682ac808788b22de2e05f10291dbd271308.mp3', # regard
+                             'hypertts-d1433cbef7f67adbb2dc5fbb193f5db6665154af110fc63d8f4783dc.mp3', # aussi
+                             ]
+        mp3_filenames = handpicked_trouble_files
+
     if CHECK_FOR_CORRUPT_FILES:
         print('Checking for corrupt audio files. This may take some time...')
         corrupt_files_prior = get_num_corrupt_audio_files_and_attempt_restore(mp3_filenames, corrupt_files_prior)
@@ -101,11 +115,11 @@ def main():
 
     # parallelize
     print(f'Executing denoising program on {len(mp3_filenames)} files.\n')
-    with Pool(processes=cpu_count()) as pool:
-        pool.map(process_audio_file, mp3_filenames)
+    # with Pool(processes=cpu_count()) as pool:
+    #     pool.map(process_audio_file, mp3_filenames)
     # old serial processing for easy debugging/profiling
-    # for filename in mp3_filenames:
-    #     process_audio_file(filename)
+    for filename in mp3_filenames:
+        process_audio_file(filename)
 
     if CHECK_FOR_CORRUPT_FILES:
         corrupt_files_after = get_num_corrupt_audio_files_and_attempt_restore(mp3_filenames, corrupt_files_after)
@@ -118,55 +132,6 @@ def main():
 
     t2 = time.time()
     print(f'\nWrote {len(mp3_filenames)} new files in {t2-t1} seconds.\n.')
-
-
-def override_prog_configs_from_file(global_symbol_table) -> None:
-    """
-    This function exists mostly for the author's edification. You probably don't need a
-    config file.
-
-    I kept forgetting to toggle the default values back to what should be the default so
-    now we're just going to override them from a local config script.
-
-    I can't git skip tree on just part of a file so... here we are.
-
-    If you really feel like you need a config file the format is:
-    {
-        'BACKUP': 'True',
-        'SomeOtherGlobal': '5',
-        'Savvy?': 'Aye',
-    }
-    :return:
-    """
-    config_path = '../resources/config.txt'
-
-    # ensure file exists, make file template if it doesn't
-    if not os.path.exists(config_path):
-        return
-
-    with open(config_path, 'r') as f:
-        config_raw = f.read()
-
-        try:
-            config_globals_dict = literal_eval(config_raw)
-
-            for key in config_globals_dict.keys():
-                if not key == 'comment': # skip comments
-                    # only modify if global exists
-                    if key not in global_symbol_table:
-                        continue
-
-                    # ensure we're importing settings that make sense
-                    imported_global_value = literal_eval(config_globals_dict[key])
-                    if type(global_symbol_table[key]) != type(imported_global_value):
-                        raise ValueError
-
-                    # assign global
-                    global_symbol_table[key] = literal_eval(config_globals_dict[key])
-        except SyntaxError or ValueError as e:
-            print(
-                f'\nCredential file at {config_path} is malformed.\nNote: if you delete your file and re-run this program it will remake a sane template.')
-            exit(-1)
 
 
 def backup_audio_collection():
@@ -236,6 +201,9 @@ def process_audio_file(filename):
     # examining file sizes of azure voices. From what I saw, no
     # recorded voices from ~30k Forvo clips fall within this size range
     # and all AI voices did.
+    # Using a program instead of HyperTTS to name audio files better
+    # is just one more reason to use local APIs I guess.
+    # *sighs* hindsight is 20/20
     if (1024 * 16 + 1) < len(pcm_bytes) < (1024 * 30.8 + 1):
         return
 
@@ -251,15 +219,20 @@ def process_audio_file(filename):
 
 def audio_chain(pcm_bytes, filename):
     # 1. remove silence
-    pcm_bytes = ffmpeg_silenceremove(pcm_bytes, filename)
+    # pcm_bytes = ffmpeg_silenceremove(pcm_bytes, filename)
 
     # 2. remove non-speech (coughing, sniffling, shuffling, humming, etc) - note: model works best early in process
+    # note: better at broadband filtering
     sr_model_path = '../resources/rnnoise_models/speech_recording.rnnn'
     secondary_prefix = '_sr_'
     pcm_bytes = ffmpeg_arnndn(pcm_bytes, filename, sr_model_path, secondary_prefix)
 
     # 3. high/low pass filter helps with extreme noises
-    pcm_bytes = ffmpeg_lowpass_highpass(pcm_bytes, filename)
+    # this is pretty hit or miss... model alone is better
+    # pcm_bytes = ffmpeg_lowpass_highpass(pcm_bytes, filename)
+
+    # 4. remove short, transient bursts (like pen clicks)
+    pcm_bytes = ffmpeg_adeclick(pcm_bytes, filename)
 
     # 4. x3 rounds of afftdn for general clarity
     # pcm_bytes = ffmpeg_afftdn(pcm_bytes, filename)
@@ -554,14 +527,15 @@ def ffmpeg_adeclick(pcm_bytes, filename):
     """
     command = [
         'ffmpeg',
-        '-f', DESIRED_FORMAT,       # unchanging input format
-        '-ar', DESIRED_RATE,        # unchanging input rate
-        '-ac', DESIRED_CHANNELS,    # unchanging input channels
-        '-i', 'pipe:0',             # unchanging stdin
-        '-filter:a', 'adeclick=w=10:o=95:a=0:t=1:b=0:m=s',
-        '-f', DESIRED_FORMAT,       # unchanging output format
-        'pipe:1'                    # unchaning stdout
+        '-f', DESIRED_FORMAT,  # unchanging input format
+        '-ar', DESIRED_RATE,  # unchanging input rate
+        '-ac', DESIRED_CHANNELS,  # unchanging input channels
+        '-i', 'pipe:0',  # unchanging stdin
+        '-filter:a', 'adeclick=w=20:o=90:a=3:t=1.0:b=3:m=a',
+        '-f', DESIRED_FORMAT,  # unchanging output format
+        'pipe:1'  # unchanging stdout
     ]
+
     return wrap_input_subprocess_run_with_intermediate_files(command, pcm_bytes, filename, ADECLICK_PREFIX)
 
 
@@ -772,15 +746,20 @@ def ffmpeg_adynamicequalizer(pcm_bytes, filename):
 
 def equalizer(pcm_bytes, filename):
     command = [
-    'ffmpeg',
-    '-f', DESIRED_FORMAT,       # unchanging input format
-    '-ar', DESIRED_RATE,        # unchanging input rate
-    '-ac', DESIRED_CHANNELS,    # unchanging input channels
-    '-i', 'pipe:0',             # unchanging stdin
-    '-filter:a', 'equalizer=f=80:t=q:w=1:g=6,equalizer=f=8000:t=q:w=1:g=5',
-    '-f', DESIRED_FORMAT,       # unchanging output format
-    'pipe:1'                    # unchaning stdout
+        'ffmpeg',
+        '-f', DESIRED_FORMAT,  # unchanging input format
+        '-ar', DESIRED_RATE,  # unchanging input rate
+        '-ac', DESIRED_CHANNELS,  # unchanging input channels
+        '-i', 'pipe:0',  # unchanging stdin
+        '-filter:a', 'equalizer=f=120:t=q:w=2:g=3,'
+                     'equalizer=f=800:t=q:w=1.5:g=2,'
+                     'equalizer=f=3500:t=q:w=2:g=4,'
+                     'equalizer=f=6000:t=q:w=2:g=3,'
+                     'equalizer=f=11000:t=q:w=1.5:g=2',
+        '-f', DESIRED_FORMAT,  # unchanging output format
+        'pipe:1'  # unchanging stdout
     ]
+
     return wrap_input_subprocess_run_with_intermediate_files(command, pcm_bytes, filename, EQUALIZER_PREFIX)
 
 # =============================================
@@ -876,9 +855,9 @@ def external_tool_ffmpeg_normalize(pcm_bytes, filename):
     command = [
         'ffmpeg-normalize',
         ffmpeg_normalize_input_filepath,
-        '-nt', 'ebu',                 # global loudness normalization
-        '-t', '-16',                  # target loudness (LUFS)
-        '-lrt', '7',                  # preserve some dynamic range
+        '-nt', 'ebu',                           # global loudness normalization
+        '-t', f'{LUFS_NORMALIZATION_LEVEL}',    # target loudness (LUFS)
+        '-lrt', '7',                            # preserve some dynamic range
         '-o', ffmpeg_normalize_output_filepath,
         '--force'
     ]
