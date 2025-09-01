@@ -22,8 +22,7 @@ import re
 from anki.errors import DBError
 from anki.collection import ImportAnkiPackageRequest, Collection
 
-from s2_Mux_Lexique import CHUNK_SIZE
-from s5_Generate_Anki_Package import PACKAGE_DIR
+from s5_Generate_Anki_Package import PACKAGE_DIR, CHUNK_SIZE
 
 #======== Configuraton ===========
 PROFILE = 'User 1'  # default is 'User 1'; see Anki->File->Switch Profile to see what you have. this is case sensitive
