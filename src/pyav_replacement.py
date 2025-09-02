@@ -65,12 +65,14 @@ def process_file(filename):
     graph_one = av.filter.Graph()
     rnnn_model_path = '../resources/rnnoise_models/speech_recording.rnnn'
 
+    # abuffer = graph_one.abuffer() # AttributeError: 'av.filter.graph.Graph' object has no attribute 'abuffer'. Did you mean: 'add_buffer'?
+    # abuffer = graph_one.add_abuffer(template=input_stream)
     graph_one.link_nodes(
         graph_one.add_abuffer(template=input_stream),
         add_arnndn_to_graph(graph_one, rnnn_model_path),
         add_adeclick_to_graph(graph_one),
         graph_one.add('abuffersink'),
-    ).config()
+    )
 
     # push frames through graph 1, collect raw PCM in memory
     pcm_bytes = bytearray()
@@ -123,9 +125,7 @@ def add_arnndn_to_graph(graph, rel_model_path, mix=1.0):
     return graph.add('arnndn', args=f'model={abs_model_path}:mix={mix}')
 
 def add_adeclick_to_graph(graph):
-    adeclick_args = (
-        'adeclick=w=20:o=90:a=3:t=1.0:b=3:m=a'
-    )
+    adeclick_args = 'w=20:o=90:a=3:t=1.0:b=3:m=a'
     return graph.add('adeclick', args=adeclick_args)
 
 def add_equalizer_to_graph(graph):
