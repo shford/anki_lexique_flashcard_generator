@@ -1,16 +1,18 @@
-import io
 import json
 import os
 import subprocess
 import time
 
 import av
+import numpy
+
 
 from s8_DeNoise_Forvo_Audio import SELECTED_AUDIO_PREFIX
 from s8_DeNoise_Forvo_Audio import ALT_TXT_IN_AUDIO
 from s8_DeNoise_Forvo_Audio import WRITE_FORMAT
 from s8_DeNoise_Forvo_Audio import USER_PATH
 from s8_DeNoise_Forvo_Audio import PROFILE
+from s8_DeNoise_Forvo_Audio import LUFS_NORMALIZATION_LEVEL
 
 
 PYAV_TEST_DIR = f'{USER_PATH}/.local/share/Anki2/{PROFILE}/PYAV_TEST_DIR'
@@ -57,16 +59,16 @@ def process_file(filename):
     input_path = f'{PYAV_TEST_DIR}/{filename}'
     with av.open(input_path) as container:
         input_stream = container.streams.audio[0]
-        sr = input_stream.codec_context.sample_rate
-        ch = input_stream.codec_context.channels
+        a_rate = input_stream.codec_context.sample_rate
+        a_channels = input_stream.codec_context.channels
+        a_layout = input_stream.codec_context.layout
+        a_format = input_stream.codec_context.format
         pcm_frames = [frame for frame in container.decode(audio=0)]
 
     # 2) first graph: arnndn -> adeclick
     graph_one = av.filter.Graph()
     rnnn_model_path = '../resources/rnnoise_models/speech_recording.rnnn'
 
-    # abuffer = graph_one.abuffer() # AttributeError: 'av.filter.graph.Graph' object has no attribute 'abuffer'. Did you mean: 'add_buffer'?
-    # abuffer = graph_one.add_abuffer(template=input_stream)
     graph_one.link_nodes(
         graph_one.add_abuffer(template=input_stream),
         add_arnndn_to_graph(graph_one, rnnn_model_path),
@@ -75,21 +77,15 @@ def process_file(filename):
     )
 
     # push frames through graph 1, collect raw PCM in memory
-    pcm_bytes = bytearray()
-    for frame in pcm_frames:
-        graph_one.push(frame)
-        while True:
-            f = graph_one.pull()
-            if f is None:
-                break
-            pcm_bytes.extend(f.planes[0].to_bytes())
+    tgt_layout = 's16'
+    pcm_bytes = convert_frames_to_pcm_bytes(pcm_frames, tgt_layout, a_layout, a_rate)
 
     # 3) first-pass loudnorm measurement
-    meas = measure_loudness_pcm(pcm_bytes, channels=ch, rate=sr, target_lufs=LUFS_NORMALIZATION_LEVEL)
+    meas = measure_loudness_pcm(pcm_bytes, channels=a_layout, rate=a_rate, target_lufs=LUFS_NORMALIZATION_LEVEL)
 
     # 4) second graph: loudnorm -> equalizer -> mp3
     with av.open(output_path, mode='w', format='mp3') as out_mp3:
-        mp3_stream = out_mp3.add_stream('libmp3lame', rate=sr, channels=ch)
+        mp3_stream = out_mp3.add_stream('libmp3lame', rate=a_rate, channels=a_layout)
 
         graph2 = av.filter.Graph()
         src2 = graph2.add_buffer(template=input_stream)
@@ -116,6 +112,28 @@ def process_file(filename):
         for pkt in mp3_stream.encode():
             out_mp3.mux(pkt)
 
+
+
+def convert_frames_to_pcm_bytes(frames, target_format, target_layout, target_rate):
+    pcm_bytes = bytearray()
+
+    for frame in frames:
+        # create a resampler to desired format/layout/rate
+        resampler = av.audio.resampler.AudioResampler(
+            format=target_format,
+            layout=target_layout,
+            rate=target_rate or frame.sample_rate
+        )
+        resampled_frames = resampler.resample(frame)  # can be a list
+
+        # extract bytes via numpy
+        for resampled in resampled_frames:
+            # packed audio stores all channels interleaved in planes[0]
+            plane = resampled.planes[0]
+            arr = numpy.frombuffer(plane, dtype=numpy.int16)  # match target_format
+            pcm_bytes.extend(arr.tobytes())
+
+    return bytes(pcm_bytes)
 
 # -------------------------
 # filter graph helpers
