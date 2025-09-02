@@ -115,16 +115,15 @@ def process_file(filename):
 
             # encode and mux mp3 data
             encoding_batch_size = 1000
-            i = 0
-            for j in range(i, len(processed_frames), encoding_batch_size):
-                frames_batch = processed_frames[i:j]
+            for start in range(0, len(processed_frames), encoding_batch_size):
+                end = start + encoding_batch_size
+                frames_batch = processed_frames[start:end]
+
                 for frame in frames_batch:
                     mp3_stream.encode(frame)
 
                 for pkt in mp3_stream.encode():
                     out_mp3.mux(pkt)
-
-                i += encoding_batch_size
 
             # Container.close() will automatically be invoked on its out_mp3 object
             # once the context manager, 'with', finishes. The close() method will
