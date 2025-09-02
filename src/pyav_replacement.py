@@ -100,25 +100,35 @@ def process_file(filename):
             mp3_stream = out_mp3.add_stream('libmp3lame', rate=a_rate)
 
             graph_two = av.filter.Graph()
-
-            graph_two.link_nodes(
-                graph_two.add_abuffer(template=input_stream),
-                add_loudnorm_to_graph(graph_two, meas),
-                add_equalizer_to_graph(graph_two),
-                graph_two.add('abuffersink'),
-            ).configure()
-
-            # equalizer_node = add_equalizer_to_graph(graph_two),
+                                                                            # for example:
+            abuffer_node = graph_two.add_abuffer(template=input_stream)     # a
+            loudnorm_node = add_loudnorm_to_graph(graph_two, meas)          # b
+            abuffer_node.link_to(loudnorm_node)                             # a -> b
+            eq_start_node, eq_end_node = add_equalizer_to_graph(graph_two)  # c -> d -> e
+            loudnorm_node.link_to(eq_start_node)                            # b -> c
+            sink = graph_two.add('abuffersink')                             # f
+            eq_end_node.link_to(sink)                                       # e -> f
+            graph_two.configure()                                           # ? you just need it
 
             # feed the processed frames from graph one into graph two
             processed_frames = process_frames(pcm_frames, graph_two)
 
-            # encode and write mp3
-            for pkt in mp3_stream.encode():
-                out_mp3.mux(pkt)
+            # encode and mux mp3 data
+            encoding_batch_size = 1000
+            i = 0
+            for j in range(i, len(processed_frames), encoding_batch_size):
+                frames_batch = processed_frames[i:j]
+                for frame in frames_batch:
+                    mp3_stream.encode(frame)
 
-            with open(output_path, 'w') as f:
-                f.write(encoded_mp3_data)
+                for pkt in mp3_stream.encode():
+                    out_mp3.mux(pkt)
+
+                i += encoding_batch_size
+
+            # Container.close() will automatically be invoked on its out_mp3 object
+            # once the context manager, 'with', finishes. The close() method will
+            # write the mp3 to disk.
 
 
 def convert_frames_to_pcm_bytes(frames, target_format, target_layout, target_rate):
@@ -201,12 +211,16 @@ def add_equalizer_to_graph(graph):
         dict(f=6000,  w=2,   g=3),
         dict(f=11000, w=1.5, g=2),
     ]
-    # join all band args into a single filter args string
-    band_args = ",".join(
-        f"f={b['f']}:t=q:w={b['w']}:g={b['g']}"
-        for b in bands
-    )
-    return graph.add('equalizer', band_args)
+
+    first_node = previous_eq_node = None
+    for b in bands:
+        new_node = graph.add('equalizer', args=f'f={b["f"]}:t=q:w={b["w"]}:g={b["g"]}')
+        if previous_eq_node:
+            previous_eq_node.link_to(new_node)
+        else:
+            first_node = new_node
+        previous_eq_node = new_node
+    return first_node, previous_eq_node # now the last
 
 def add_loudnorm_to_graph(graph, meas):
     ln_args = (
