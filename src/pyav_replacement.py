@@ -85,57 +85,7 @@ def process_file(filename):
         ).configure()
 
         # 3) push frames through graph one
-        # for frame in container.decode(input_stream):
-        # for frame in pcm_frames:
-        #     graph_one.push(frame)
-        #     while True:
-        #         try:
-        #             p_frame = graph_one.pull()
-        #             if p_frame is None:
-        #                 break
-        #             processed_graph_one_frames.append(p_frame)
-        #         except:
-        #             time.sleep(0.001)
-        processed_frames = []
-        frame_iter = iter(pcm_frames)
-        done_input = False
-
-        def process_frames():
-            has_frames_to_push = True
-            while True:
-                # try to push next input frame, if available
-                if has_frames_to_push:
-                    try:
-                        frame = next(frame_iter)
-                        graph_one.push(frame)
-                    except StopIteration:
-                        has_frames_to_push = False
-                        graph_one.push(None)  # signal end of input
-                    except:
-                        # in case of implementation that's not like fsm and not done
-                        # but was actually just blocking
-                        continue
-
-                # poll to pull available frames
-                while True:
-                    try:
-                        f = graph_one.pull()
-                        if f is None and not has_frames_to_push:
-                            # done.
-                            return processed_frames
-                        elif f is not None:
-                            processed_frames.append(f)
-                        break # break if not done - to poll or push more frames
-                    except av.BlockingIOError:
-                        # graph is not ready for more output yet,
-                        # attempt to push more frames (good if like fsm),
-                        # polls if not able to push
-                        break
-                    except av.EOFError:
-                        # some implementations let you know they're done via this error :')
-                        return processed_frames
-
-        processed_frames = process_frames()
+        processed_frames = process_frames(pcm_frames, graph_one)
 
         # 4) convert frames to raw PCM and measure loudness
         tgt_layout = 's16'
@@ -154,23 +104,21 @@ def process_file(filename):
             graph_two.link_nodes(
                 graph_two.add_abuffer(template=input_stream),
                 add_loudnorm_to_graph(graph_two, meas),
+                add_equalizer_to_graph(graph_two),
                 graph_two.add('abuffersink'),
             ).configure()
 
-            equalizer_node = add_equalizer_to_graph(graph_two),
+            # equalizer_node = add_equalizer_to_graph(graph_two),
 
-            # feed the original PCM frames into the second graph
-            for frame in processed_frames:
-                graph_two.push(frame)
-                while True:
-                    f = graph_two.pull()
-                    if f is None:
-                        break
-                    for pkt in mp3_stream.encode(f):
-                        out_mp3.mux(pkt)
+            # feed the processed frames from graph one into graph two
+            processed_frames = process_frames(pcm_frames, graph_two)
 
+            # encode and write mp3
             for pkt in mp3_stream.encode():
                 out_mp3.mux(pkt)
+
+            with open(output_path, 'w') as f:
+                f.write(encoded_mp3_data)
 
 
 def convert_frames_to_pcm_bytes(frames, target_format, target_layout, target_rate):
@@ -194,6 +142,46 @@ def convert_frames_to_pcm_bytes(frames, target_format, target_layout, target_rat
 
     return bytes(pcm_bytes)
 
+
+def process_frames(frames, graph):
+    processed_frames = []
+    frame_iter = iter(frames)
+    has_frames_to_push = True
+    while True:
+        # try to push next input frame, if available
+        if has_frames_to_push:
+            try:
+                frame = next(frame_iter)
+                graph.push(frame)
+            except StopIteration:
+                has_frames_to_push = False
+                graph.push(None)  # signal end of input
+            except (av.BlockingIOError, av.EOFError):
+                # in case of implementation that's not like fsm and not done
+                # but was actually just blocking
+                # benign: just means the graph isn't ready yet
+                pass
+
+        # poll to pull available frames
+        while True:
+            try:
+                f = graph.pull()
+                if f is None and not has_frames_to_push:
+                    # done.
+                    return processed_frames
+                elif f is not None:
+                    processed_frames.append(f)
+                break  # break if not done - to poll or push more frames
+            except av.BlockingIOError:
+                # graph is not ready for more output yet,
+                # attempt to push more frames (good if like fsm),
+                # polls if not able to push
+                break
+            except av.EOFError:
+                # some implementations let you know they're done via this error :')
+                return processed_frames
+
+
 # -------------------------
 # filter graph helpers
 # -------------------------
@@ -213,13 +201,12 @@ def add_equalizer_to_graph(graph):
         dict(f=6000,  w=2,   g=3),
         dict(f=11000, w=1.5, g=2),
     ]
-    node = None
-    for b in bands:
-        eq_node = graph.add('equalizer', args=f'f={b["f"]}:t=q:w={b["w"]}:g={b["g"]}')
-        if node is not None:
-            node.link_to(eq_node)
-        node = eq_node
-    return node
+    # join all band args into a single filter args string
+    band_args = ",".join(
+        f"f={b['f']}:t=q:w={b['w']}:g={b['g']}"
+        for b in bands
+    )
+    return graph.add('equalizer', band_args)
 
 def add_loudnorm_to_graph(graph, meas):
     ln_args = (
