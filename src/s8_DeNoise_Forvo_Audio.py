@@ -59,7 +59,7 @@ DESIRED_CHANNELS = '1'
 DESIRED_FORMAT = 's16le'
 DESIRED_CODEC = 'pcm_s16le'
 BYTES_PER_SAMPLE = '2'  # 16-bit = 2 bytes
-LUFS_NORMALIZATION_LEVEL = -12 # was -16, whisperers still too quiet
+LUFS_NORMALIZATION_LEVEL = -10 # was -16, then -12, still too quiet still too quiet. optimal prob in range -16 to -6.
 
 # Intermediate File Naming Constants (for debugging/fine tuning ffmpeg arguments)
 USER_PATH = os.path.expanduser('~')
@@ -76,7 +76,8 @@ ANLMDN_PREFIX = 'anlmdn_broadband_least_'
 ADYNAMICEQ_PREFIX = 'adynamiceq_'
 EXTERNAL_FFMPEG_NORMALIZE = 'extern_ffmpeg_norm_'
 SPEECHNORM_PREFIX = 'speechnorm_'
-NORMALIZE_PREFIX = 'norm_'
+NORMALIZE_PREFIX = 'norm_lufs_'
+TRUE_PEAK_NORMALIZATION_PREFIX = 'norm_true_peak_'
 EQUALIZER_PREFIX = 'final_'
 
 
@@ -227,14 +228,14 @@ def audio_chain(pcm_bytes, filename):
     secondary_prefix = '_sr_'
     pcm_bytes = ffmpeg_arnndn(pcm_bytes, filename, sr_model_path, secondary_prefix)
 
-    # 3. high/low pass filter helps with extreme noises
+    # 3. high/low pass filter helps with extreme pitches
     # this is pretty hit or miss... model alone is better
     # pcm_bytes = ffmpeg_lowpass_highpass(pcm_bytes, filename)
 
     # 4. remove short, transient bursts (like pen clicks)
     pcm_bytes = ffmpeg_adeclick(pcm_bytes, filename)
 
-    # 4. x3 rounds of afftdn for general clarity
+    # 4. x3 rounds of afftdn for general clarity - not bad. lost depth. perhaps if less aggressive.
     # pcm_bytes = ffmpeg_afftdn(pcm_bytes, filename)
     # pcm_bytes = ffmpeg_afftdn(pcm_bytes, filename)
     # pcm_bytes = ffmpeg_afftdn(pcm_bytes, filename)
@@ -242,13 +243,18 @@ def audio_chain(pcm_bytes, filename):
     # 5. stft is good at cleaning front and tail
     # pcm_bytes = neural_nine_demo(pcm_bytes, filename)
 
-    # skip local volume normalization - it ruins emphasis
+    # skip local volume normalization - it ruins emphasis (e.g. "essential transients")
 
-    # 6. global volume normalization
-    step6_bytes = external_tool_ffmpeg_normalize(pcm_bytes, filename)
+    # 6. global volume LUFS normalization
+    pcm_bytes = external_tool_ffmpeg_normalize(pcm_bytes, filename)
+    # todo replace external library w/ commands
+    ffmpeg_two_step_loudnorm()
 
-    # 7. rebrighten a bit
-    pcm_bytes = equalizer(step6_bytes, filename)
+    # 7. todo test peak limiter
+    pcm_bytes = ffmpeg_peak_limiter(pcm_bytes, filename)
+
+    # 8. rebrighten a bit - beautifully dialed in.
+    pcm_bytes = equalizer(pcm_bytes, filename)
     return pcm_bytes
 
 
@@ -657,6 +663,72 @@ def ffmpeg_anlmdn(pcm_bytes, filename):
         'pipe:1'                    # unchaning stdout
     ]
     return wrap_input_subprocess_run_with_intermediate_files(command, pcm_bytes, filename, ANLMDN_PREFIX)
+
+
+def ffmpeg_two_step_loudnorm():
+    # https://peterforgacs.github.io/2018/05/20/Audio-normalization-with-ffmpeg/
+
+    TP = -1
+    LRA = 11 # 5 - 15, default 7. lower values changges the shape of the curve to be more aggresive - e.g. quiet = less quiet, loud = less loud, ergo lower Loudnous Range.
+
+    # json = ffmpeg measurement
+    # ffmpeg -i input.wav \
+    # -af loudnorm=I=LUFS_NORMALIZATION_LEVEL:TP=TP:LRA=LRA:print_format=json \
+    # -f null -
+
+    # parse json
+
+    # ffmpeg loudnorm filter json[...]
+    # ffmpeg -i input.wav -af \
+    # "loudnorm=I=-10:TP=-1:LRA=11:linear=true:measured_I=MEAS_I:measured_TP=MEAS_TP:measured_LRA=MEAS_LRA:measured_thresh=MEAS_THRESH, \
+    #  aresample=sample_rate=192000:resampler=soxr, \
+    #  alimiter=limit=-1, \
+    #  aresample=sample_rate=48000:resampler=soxr" \
+    # output.wav
+    return
+
+def ffmpeg_peak_limiter(pcm_bytes, filename):
+    # Description: Usually peak limiting (peak limiter - no relation at all to peak normalization)
+    #               is done using the TP=-1 or -1.5 in loudnorm. In my case I implemented
+    #               normalization with the external ffmpeg-normalize library which seems
+    #               to not support the TP option. I couldn't find what their library sets
+    #               TP to. The ffmpeg default is -2.0, but we can't trust the external library
+    #               is initiating to what we wanted. According to ChatGPT the TP option apparently
+    #               sometimes fails to do its job right so we'd want to run alimiter afterwards anyways.
+    #               It is not clear to me whether TP in loudnorm fails because it just does
+    #               as it's implemented or because we do not oversample by x2-4 times prior to
+    #               loudnorm (which of course is opaquely done in ffmpeg-normalize).
+    #
+    #               In any case, running alimiter after normalization shouldn't hurt anything
+    #               and at worst may waste a bit of time.
+    #
+    # Command:
+    # ffmpeg -i input.wav -af \
+    # "aresample=sample_rate=176400:resampler=soxr, \
+    #  alimiter=limit=-1, \
+    #  aresample=sample_rate=44100:resampler=soxr" \
+    # output.wav
+
+    oversample_rate = DESIRED_RATE * 4  # x2-4 oversampling is recommended by the documentation prior to using alimiter
+    limit = -1                          # dBFS; leaves room to prevent clipping
+    command = [
+        'ffmpeg',
+        '-f', DESIRED_FORMAT,
+        '-ar', DESIRED_RATE,
+        '-ac', DESIRED_CHANNELS,
+        '-i', 'pipe:0',
+
+        # AUDIO FILTER CHAIN
+        '-filter:a',
+        f'aresample=sample_rate={oversample_rate}:resampler=soxr,'
+        f'alimiter=limit={limit}:level=disabled,' # level=disabled prevents additional normalization
+        f'aresample=sample_rate={DESIRED_RATE}:resampler=soxr',
+
+        '-f', DESIRED_FORMAT,
+        'pipe:1'
+    ]
+
+    return wrap_input_subprocess_run_with_intermediate_files(command, pcm_bytes, filename, TRUE_PEAK_NORMALIZATION_PREFIX)
 
 
 def ffmpeg_adynamicequalizer(pcm_bytes, filename):
