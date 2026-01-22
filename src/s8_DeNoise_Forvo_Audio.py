@@ -22,6 +22,7 @@ A note about ffmpeg-normalize:
 """
 import datetime
 import io
+import math
 import os
 import shutil
 import subprocess
@@ -76,8 +77,7 @@ ANLMDN_PREFIX = 'anlmdn_broadband_least_'
 ADYNAMICEQ_PREFIX = 'adynamiceq_'
 EXTERNAL_FFMPEG_NORMALIZE = 'extern_ffmpeg_norm_'
 SPEECHNORM_PREFIX = 'speechnorm_'
-NORMALIZE_PREFIX = 'norm_lufs_'
-TRUE_PEAK_NORMALIZATION_PREFIX = 'norm_true_peak_'
+LUFS_NORMALIZATION_PREFIX = 'norm_lufs_'
 EQUALIZER_PREFIX = 'final_'
 
 
@@ -686,49 +686,6 @@ def ffmpeg_two_step_loudnorm():
     #  aresample=sample_rate=48000:resampler=soxr" \
     # output.wav
     return
-
-def ffmpeg_peak_limiter(pcm_bytes, filename):
-    # Description: Usually peak limiting (peak limiter - no relation at all to peak normalization)
-    #               is done using the TP=-1 or -1.5 in loudnorm. In my case I implemented
-    #               normalization with the external ffmpeg-normalize library which seems
-    #               to not support the TP option. I couldn't find what their library sets
-    #               TP to. The ffmpeg default is -2.0, but we can't trust the external library
-    #               is initiating to what we wanted. According to ChatGPT the TP option apparently
-    #               sometimes fails to do its job right so we'd want to run alimiter afterwards anyways.
-    #               It is not clear to me whether TP in loudnorm fails because it just does
-    #               as it's implemented or because we do not oversample by x2-4 times prior to
-    #               loudnorm (which of course is opaquely done in ffmpeg-normalize).
-    #
-    #               In any case, running alimiter after normalization shouldn't hurt anything
-    #               and at worst may waste a bit of time.
-    #
-    # Command:
-    # ffmpeg -i input.wav -af \
-    # "aresample=sample_rate=176400:resampler=soxr, \
-    #  alimiter=limit=-1, \
-    #  aresample=sample_rate=44100:resampler=soxr" \
-    # output.wav
-
-    oversample_rate = DESIRED_RATE * 4  # x2-4 oversampling is recommended by the documentation prior to using alimiter
-    limit = -1                          # dBFS; leaves room to prevent clipping
-    command = [
-        'ffmpeg',
-        '-f', DESIRED_FORMAT,
-        '-ar', DESIRED_RATE,
-        '-ac', DESIRED_CHANNELS,
-        '-i', 'pipe:0',
-
-        # AUDIO FILTER CHAIN
-        '-filter:a',
-        f'aresample=sample_rate={oversample_rate}:resampler=soxr,'
-        f'alimiter=limit={limit}:level=disabled,' # level=disabled prevents additional normalization
-        f'aresample=sample_rate={DESIRED_RATE}:resampler=soxr',
-
-        '-f', DESIRED_FORMAT,
-        'pipe:1'
-    ]
-
-    return wrap_input_subprocess_run_with_intermediate_files(command, pcm_bytes, filename, TRUE_PEAK_NORMALIZATION_PREFIX)
 
 
 def ffmpeg_adynamicequalizer(pcm_bytes, filename):
