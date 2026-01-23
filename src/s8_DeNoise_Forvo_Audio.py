@@ -82,8 +82,33 @@ EQUALIZER_PREFIX = 'final_'
 #   set batch sizes
 
 def main():
+    input_files_dir = '../resources/test_sound_input'
+    ouput_files_dir = '../default_output/test_sound_output'
+    handpicked_trouble_files = ['abatteur_fr_canada.mp3',
+                                'abduction_fr_canada.mp3',
+                                'hypertts-abfa294bc860ee1de8562f87fde34ba3bc64b04951d63e978b466f59.mp3',  # corps
+                                'hypertts-b68f18b7fbb001873cbfa7c5126deaed887b582899e1db4b5d38dd96.mp3',  # oeil
+                                'hypertts-10c727621af59dc093fd4ff5131409910f1b98deec972ba4644ca509.mp3',  # problème
+                                'hypertts-d2f1e3f45ee9bf07b026f6aac11416911c0552ffe2d94de867550379.mp3',  # comprendre
+                                'hypertts-f7a0c40d2fe7800b2a6c9682ac808788b22de2e05f10291dbd271308.mp3',  # regard
+                                'hypertts-d1433cbef7f67adbb2dc5fbb193f5db6665154af110fc63d8f4783dc.mp3',  # aussi
+                                ]
+    for filename in handpicked_trouble_files:
+        # test folder
+        input_filepath = f'{input_files_dir}/{filename}'
+        ouput_filepath = f'{ouput_files_dir}/{filename}'
+        pcm_bytes = _read_audiofile_to_pcm_bytes(input_filepath) # note len is in bytes
 
-    return
+        # process
+        ffmpeg_two_step_loudnorm(pcm_bytes, filename)
+
+        # write audio to mp3 file
+        mp3_data = _convert_pcm_to_mp3(pcm_bytes)
+        with open(ouput_filepath, 'wb') as f:
+            f.write(mp3_data)
+        print(f'Wrote: {filename}.')
+
+        return
 
 def main1():
     override_prog_configs_from_file(globals())
@@ -675,37 +700,54 @@ def ffmpeg_two_step_loudnorm(pcm_bytes, filename):
         # ffmpeg -i input.mp4 -af loudnorm=I=-23:LRA=7:tp=-2:print_format=json -f null -
         command = [
             'ffmpeg',
+            '-f', DESIRED_FORMAT,
+            '-ar', DESIRED_RATE,
+            '-ac', DESIRED_CHANNELS,
             '-i', 'pipe:0',
             '-filter:a', f'loudnorm=I={LUFS_NORMALIZATION_LEVEL}:LRA={lra}:tp={true_peak}:print_format=json',
             '-f', 'null',
-            'pipe:1'
+            '-'
         ]
 
-        out = wrap_input_subprocess_run_with_intermediate_files(command, pcm_bytes, filename, EQUALIZER_PREFIX)
-        return out
+        # run command
+        p = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        p.stdin.write(pcm_bytes)
+        p.stdin.close()  # THIS is the "EOF"
+        j = p.stderr.read()
+
+        # remove formatting
+        json_s = j.decode('utf-8')
+        rem_formatting = json_s.replace('\n','')
+        rem_formatting = rem_formatting.replace('\t','')
+
+        # find json
+        import re
+        pattern = '{.*}'
+        result = re.search(pattern, rem_formatting)
+        reg = result.group(0)
+
+        # load json
+        import json
+        return json.loads(reg)
 
     def step2_adjust(measurements):
         # ffmpeg -i input.mp4 -af loudnorm=I=-23:LRA=7:tp=-2:measured_I=-30:measured_LRA=1.1:measured_tp=-11 04:measured_thresh=-40.21:offset=-0.47 -ar 48k -y output.mp4
         command = [
             'ffmpeg',
+            '-f', DESIRED_FORMAT,
+            '-ar', DESIRED_RATE,
+            '-ac', DESIRED_CHANNELS,
             '-i', 'pipe:0',
             '-filter:a',
-            f'loudnorm=I={LUFS_NORMALIZATION_LEVEL}:LRA={lra}:tp={true_peak}:measured_I=-30:measured_LRA=1.1:measured_tp=-11.04:measured_thresh=-40.21:offset=-0.47',
+            f'loudnorm=I={LUFS_NORMALIZATION_LEVEL}:LRA={lra}:tp={true_peak}:measured_I={measurements['input_i']}:measured_LRA={measurements['input_lra']}:measured_tp={measurements['input_tp']}:measured_thresh={measurements['input_thresh']}:offset={measurements['target_offset']}',
             '-ar', DESIRED_RATE,
+            '-f', DESIRED_FORMAT,
             'pipe:1'
         ]
 
-        out = wrap_input_subprocess_run_with_intermediate_files(command, pcm_bytes, filename, EQUALIZER_PREFIX)
-        return out
+        return wrap_input_subprocess_run_with_intermediate_files(command, pcm_bytes, filename, EQUALIZER_PREFIX)
 
-    # ffmpeg loudnorm filter json[...]
-    # ffmpeg -i input.wav -af \
-    # "loudnorm=I=-10:TP=-1:LRA=11:linear=true:measured_I=MEAS_I:measured_TP=MEAS_TP:measured_LRA=MEAS_LRA:measured_thresh=MEAS_THRESH, \
-    #  aresample=sample_rate=192000:resampler=soxr, \
-    #  alimiter=limit=-1, \
-    #  aresample=sample_rate=48000:resampler=soxr" \
-    # output.wav
-    return
+    return step2_adjust(step1_measure())
 
 
 def ffmpeg_adynamicequalizer(pcm_bytes, filename):
