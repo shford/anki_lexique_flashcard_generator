@@ -22,8 +22,6 @@ A note about ffmpeg-normalize:
 """
 import datetime
 import io
-import math
-import os
 import shutil
 import subprocess
 import time
@@ -80,8 +78,14 @@ SPEECHNORM_PREFIX = 'speechnorm_'
 LUFS_NORMALIZATION_PREFIX = 'norm_lufs_'
 EQUALIZER_PREFIX = 'final_'
 
+# todo mirror ffmpeg-normalize batch normalization inline for pcm w/out unnecessary I/O overhead
+#   set batch sizes
 
 def main():
+
+    return
+
+def main1():
     override_prog_configs_from_file(globals())
     corrupt_files_prior = set()
     corrupt_files_after = set()
@@ -248,10 +252,7 @@ def audio_chain(pcm_bytes, filename):
     # 6. global volume LUFS normalization
     pcm_bytes = external_tool_ffmpeg_normalize(pcm_bytes, filename)
     # todo replace external library w/ commands
-    ffmpeg_two_step_loudnorm()
-
-    # 7. todo test peak limiter
-    pcm_bytes = ffmpeg_peak_limiter(pcm_bytes, filename)
+    ffmpeg_two_step_loudnorm(pcm_bytes, filename)
 
     # 8. rebrighten a bit - beautifully dialed in.
     pcm_bytes = equalizer(pcm_bytes, filename)
@@ -665,18 +666,37 @@ def ffmpeg_anlmdn(pcm_bytes, filename):
     return wrap_input_subprocess_run_with_intermediate_files(command, pcm_bytes, filename, ANLMDN_PREFIX)
 
 
-def ffmpeg_two_step_loudnorm():
+def ffmpeg_two_step_loudnorm(pcm_bytes, filename):
     # https://peterforgacs.github.io/2018/05/20/Audio-normalization-with-ffmpeg/
 
-    TP = -1
-    LRA = 11 # 5 - 15, default 7. lower values changges the shape of the curve to be more aggresive - e.g. quiet = less quiet, loud = less loud, ergo lower Loudnous Range.
+    lra = 7 # same as -lrt in ffmpeg-normalize. values 5 - 15, default 7. lower values changges the shape of the curve to be more aggresive - e.g. quiet = less quiet, loud = less loud, ergo lower Loudnous Range.
+    true_peak = -1 # true peak limiter, usually -0.5 to -1.5 dBTP
+    def step1_measure():
+        # ffmpeg -i input.mp4 -af loudnorm=I=-23:LRA=7:tp=-2:print_format=json -f null -
+        command = [
+            'ffmpeg',
+            '-i', 'pipe:0',
+            '-filter:a', f'loudnorm=I={LUFS_NORMALIZATION_LEVEL}:LRA={lra}:tp={true_peak}:print_format=json',
+            '-f', 'null',
+            'pipe:1'
+        ]
 
-    # json = ffmpeg measurement
-    # ffmpeg -i input.wav \
-    # -af loudnorm=I=LUFS_NORMALIZATION_LEVEL:TP=TP:LRA=LRA:print_format=json \
-    # -f null -
+        out = wrap_input_subprocess_run_with_intermediate_files(command, pcm_bytes, filename, EQUALIZER_PREFIX)
+        return out
 
-    # parse json
+    def step2_adjust(measurements):
+        # ffmpeg -i input.mp4 -af loudnorm=I=-23:LRA=7:tp=-2:measured_I=-30:measured_LRA=1.1:measured_tp=-11 04:measured_thresh=-40.21:offset=-0.47 -ar 48k -y output.mp4
+        command = [
+            'ffmpeg',
+            '-i', 'pipe:0',
+            '-filter:a',
+            f'loudnorm=I={LUFS_NORMALIZATION_LEVEL}:LRA={lra}:tp={true_peak}:measured_I=-30:measured_LRA=1.1:measured_tp=-11.04:measured_thresh=-40.21:offset=-0.47',
+            '-ar', DESIRED_RATE,
+            'pipe:1'
+        ]
+
+        out = wrap_input_subprocess_run_with_intermediate_files(command, pcm_bytes, filename, EQUALIZER_PREFIX)
+        return out
 
     # ffmpeg loudnorm filter json[...]
     # ffmpeg -i input.wav -af \
