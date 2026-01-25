@@ -20,7 +20,6 @@ A note about ffmpeg-normalize:
     However, (the old) ffmpeg-normalize version 1.16.0 actually had really good examples and is immortalized on pypi.
     https://pypi.org/project/ffmpeg-normalize/1.16.0/
 """
-import datetime
 import io
 import shutil
 import subprocess
@@ -58,7 +57,7 @@ DESIRED_CHANNELS = '1'
 DESIRED_FORMAT = 's16le'
 DESIRED_CODEC = 'pcm_s16le'
 BYTES_PER_SAMPLE = '2'  # 16-bit = 2 bytes
-LUFS_NORMALIZATION_LEVEL = -10 # was -16, then -12, still too quiet still too quiet. optimal prob in range -16 to -6.
+LUFS_NORMALIZATION_LEVEL = -16 # was -16, then -12, still too quiet still too quiet. optimal prob in range -16 to -6.
 
 # Intermediate File Naming Constants (for debugging/fine tuning ffmpeg arguments)
 USER_PATH = os.path.expanduser('~')
@@ -81,17 +80,20 @@ EQUALIZER_PREFIX = 'final_'
 # todo mirror ffmpeg-normalize batch normalization inline for pcm w/out unnecessary I/O overhead
 #   set batch sizes
 
-def main():
+def test_main():
     input_files_dir = '../resources/test_sound_input'
     ouput_files_dir = '../default_output/test_sound_output'
     handpicked_trouble_files = ['abatteur_fr_canada.mp3',
                                 'abduction_fr_canada.mp3',
+                                'anachronique_fr_canada.mp3', # quiet
+                                'amollir_fr_netherlands.mp3', # quiet
                                 'hypertts-abfa294bc860ee1de8562f87fde34ba3bc64b04951d63e978b466f59.mp3',  # corps
                                 'hypertts-b68f18b7fbb001873cbfa7c5126deaed887b582899e1db4b5d38dd96.mp3',  # oeil
                                 'hypertts-10c727621af59dc093fd4ff5131409910f1b98deec972ba4644ca509.mp3',  # problème
                                 'hypertts-d2f1e3f45ee9bf07b026f6aac11416911c0552ffe2d94de867550379.mp3',  # comprendre
                                 'hypertts-f7a0c40d2fe7800b2a6c9682ac808788b22de2e05f10291dbd271308.mp3',  # regard
                                 'hypertts-d1433cbef7f67adbb2dc5fbb193f5db6665154af110fc63d8f4783dc.mp3',  # aussi
+                                'hypertts-7bb303c3f3bd58f6c0514510e8dd4801bfb33777f384c176aa62b5f2.mp3',  # quiet
                                 ]
     for filename in handpicked_trouble_files:
         # test folder
@@ -100,7 +102,8 @@ def main():
         pcm_bytes = _read_audiofile_to_pcm_bytes(input_filepath) # note len is in bytes
 
         # process
-        ffmpeg_two_step_loudnorm(pcm_bytes, filename)
+        pcm_bytes = ffmpeg_two_step_loudnorm(pcm_bytes, filename)
+        # pcm_bytes = external_tool_ffmpeg_normalize(pcm_bytes, filename)
 
         # write audio to mp3 file
         mp3_data = _convert_pcm_to_mp3(pcm_bytes)
@@ -108,9 +111,9 @@ def main():
             f.write(mp3_data)
         print(f'Wrote: {filename}.')
 
-        return
+    return
 
-def main1():
+def main():
     override_prog_configs_from_file(globals())
     corrupt_files_prior = set()
     corrupt_files_after = set()
@@ -165,7 +168,6 @@ def main1():
 
 
 def backup_audio_collection():
-    t = datetime.datetime.now()
     timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
 
     src_collection = f'{USER_PATH}/.local/share/Anki2/{PROFILE}/collection.media'
@@ -174,7 +176,6 @@ def backup_audio_collection():
 
 
 def get_num_corrupt_audio_files_and_attempt_restore(filenames: list, corrupt_files: set):
-    bad_files = []
     for filename in filenames:
         path = f'{ANKI_DIR}/{filename}'
 
@@ -274,10 +275,9 @@ def audio_chain(pcm_bytes, filename):
 
     # skip local volume normalization - it ruins emphasis (e.g. "essential transients")
 
-    # 6. global volume LUFS normalization
-    pcm_bytes = external_tool_ffmpeg_normalize(pcm_bytes, filename)
-    # todo replace external library w/ commands
-    ffmpeg_two_step_loudnorm(pcm_bytes, filename)
+    # 6. global volume LUFS normalization - replaced external ffmpeg-normalize w/ loudnorm
+    # pcm_bytes = external_tool_ffmpeg_normalize(pcm_bytes, filename)
+    pcm_bytes = ffmpeg_two_step_loudnorm(pcm_bytes, filename)
 
     # 8. rebrighten a bit - beautifully dialed in.
     pcm_bytes = equalizer(pcm_bytes, filename)
