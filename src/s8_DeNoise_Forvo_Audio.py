@@ -113,6 +113,7 @@ def test_main():
 
     return
 
+
 def main():
     override_prog_configs_from_file(globals())
     corrupt_files_prior = set()
@@ -120,7 +121,6 @@ def main():
 
     t1 = time.time()
     if BACKUP:
-        print('Backing up collection.')
         backup_audio_collection()
 
     # populate filenames
@@ -168,11 +168,9 @@ def main():
 
 
 def backup_audio_collection():
+    print('Backing up collection.')
     timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
-
-    src_collection = f'{USER_PATH}/.local/share/Anki2/{PROFILE}/collection.media'
-    dst_collection = f'{USER_PATH}/.local/share/Anki2/{PROFILE}/collection.media.backup_{timestamp}'
-    shutil.copytree(src_collection, dst_collection, dirs_exist_ok=True) # overwriting is a-okay :)
+    shutil.copytree(ANKI_DIR, f'{ANKI_DIR}.backup_{timestamp}', dirs_exist_ok=True) # overwriting is a-okay :)
 
 
 def get_num_corrupt_audio_files_and_attempt_restore(filenames: list, corrupt_files: set):
