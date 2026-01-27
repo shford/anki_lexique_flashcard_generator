@@ -59,7 +59,7 @@ DESIRED_CHANNELS = '1'
 DESIRED_FORMAT = 'f32le'
 DESIRED_CODEC = 'pcm_f32le'
 BYTES_PER_SAMPLE = '2'  # 16-bit = 2 bytes
-LUFS_NORMALIZATION_LEVEL = -5 # was -16, then -12, still too quiet still too quiet. optimal prob in range -16 to -6.
+LUFS_NORMALIZATION_LEVEL = -8 # was -16, then -12, still too quiet still too quiet. optimal prob in range -16 to -6.
 
 # Intermediate File Naming Constants (for debugging/fine tuning ffmpeg arguments)
 USER_PATH = os.path.expanduser('~')
@@ -84,7 +84,7 @@ EQUALIZER_PREFIX = 'final_'
 # todo mirror ffmpeg-normalize batch normalization inline for pcm w/out unnecessary I/O overhead
 #   set batch sizes
 
-def test_main():
+def main():
     input_files_dir = '../resources/test_sound_input'
     ouput_files_dir = '../default_output/test_sound_output'
     handpicked_trouble_files = ['abatteur_fr_canada.mp3',
@@ -110,9 +110,12 @@ def test_main():
         secondary_prefix = '_sr_'
         pcm_bytes = ffmpeg_arnndn(pcm_bytes, filename, sr_model_path, secondary_prefix)
         pcm_bytes = ffmpeg_adeclick(pcm_bytes, filename)
-        # pcm_bytes = ffmpeg_lowpass_highpass(pcm_bytes, filename)
         pcm_bytes = ffmpeg_ebu_r128_loudnorm(pcm_bytes, filename)
         pcm_bytes = ffmpeg_adjust_excess_volume(pcm_bytes, filename)
+
+        # sometimes low level noise was amplified by luf norm if speaker was quiet and there was lots of quiet noise so we want to try to get rid of that
+        pcm_bytes = ffmpeg_lowpass_highpass(pcm_bytes, filename)
+
         # pcm_bytes = external_tool_ffmpeg_normalize(pcm_bytes, filename)
         pcm_bytes = equalizer(pcm_bytes, filename)
 
@@ -121,11 +124,10 @@ def test_main():
         with open(ouput_filepath, 'wb') as f:
             f.write(mp3_data)
         print(f'Wrote: {filename}.')
-
     return
 
 
-def main():
+def real_main():
     override_prog_configs_from_file(globals())
     corrupt_files_prior = set()
     corrupt_files_after = set()
@@ -547,7 +549,7 @@ def ffmpeg_lowpass_highpass(pcm_bytes, filename):
         '-ar', DESIRED_RATE,        # unchanging input rate
         '-ac', DESIRED_CHANNELS,    # unchanging input channels
         '-i', 'pipe:0',             # unchanging stdin
-        '-filter:a', f'highpass=f=100, lowpass=f=3000',
+        '-filter:a', f'lowpass=f=4400', # removed filter highpass=f=100,
         '-f', DESIRED_FORMAT,       # unchanging output format
         'pipe:1'                    # unchaning stdout
     ]
@@ -586,10 +588,11 @@ def ffmpeg_adeclick(pcm_bytes, filename):
 def ffmpeg_afwtdn(pcm_bytes, filename):
     """
     todo
-        - More of a weird note really, the default and mild commands both SIGSEGV's. The issue must
-          presumably be in the underlying ffmpeg C/C++ files. I tried several variations of the arguments.
+        - More of a weird note really, the default and mild commands both SIGSEGV's. The issue is
+          presumably b/w python type conversion and the underlying ffmpeg C/C++ files, maybe?
+          I tried several variations of the arguments.
           I'm pretty sure I narrowed the issues down to the wavets: sym2 & sym4.
-           Installed version at the time of writing was ffmpeg version 6.1.1-3ubuntu5 on Ubuntu 24.04.3.
+          Installed version at the time of writing was ffmpeg version 6.1.1-3ubuntu5 on Ubuntu 24.04.3.
 
     reference command:
     ffmpeg -y -i <path_in>
