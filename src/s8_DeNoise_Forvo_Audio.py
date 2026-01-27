@@ -84,7 +84,7 @@ EQUALIZER_PREFIX = 'final_'
 # todo mirror ffmpeg-normalize batch normalization inline for pcm w/out unnecessary I/O overhead
 #   set batch sizes
 
-def main():
+def test_main():
     input_files_dir = '../resources/test_sound_input'
     ouput_files_dir = '../default_output/test_sound_output'
     handpicked_trouble_files = ['abatteur_fr_canada.mp3',
@@ -125,7 +125,7 @@ def main():
     return
 
 
-def real_main():
+def main():
     override_prog_configs_from_file(globals())
     corrupt_files_prior = set()
     corrupt_files_after = set()
@@ -134,7 +134,7 @@ def real_main():
     if BACKUP:
         backup_audio_collection()
 
-    # populate filenames
+    # pofind . -name "*" -type f -exec mv {} ~/.local/share/Anki2/User\ 1/collection.media \;pulate filenames
     dir_contents = os.listdir(ANKI_DIR)
     hypertts_mp3_filenames = [f for f in dir_contents if (os.path.isfile(os.path.join(ANKI_DIR, f)) and SELECTED_AUDIO_PREFIX in f)]
     std_forvo_api_mp3_filenames = [f for f in dir_contents if (os.path.isfile(os.path.join(ANKI_DIR, f)) and ALT_TXT_IN_AUDIO in f and WRITE_FORMAT in f and not 'ATTS ' in f)]
@@ -284,9 +284,12 @@ def audio_chain(pcm_bytes, filename):
 
     # skip local volume normalization - it ruins emphasis (e.g. "essential transients")
 
-    # 6. global volume LUFS normalization - replaced external ffmpeg-normalize w/ loudnorm
+    # 6. global volume LUFS normalization (adjusts rel to rest of file.. or batch) - note: replaced external ffmpeg-normalize
     # pcm_bytes = external_tool_ffmpeg_normalize(pcm_bytes, filename)
     pcm_bytes = ffmpeg_ebu_r128_loudnorm(pcm_bytes, filename)
+
+    # 7. volume normalization (applies gain to for absolute adjustment)
+    pcm_bytes = ffmpeg_adjust_excess_volume(pcm_bytes, filename)
 
     # 8. rebrighten a bit - beautifully dialed in.
     pcm_bytes = equalizer(pcm_bytes, filename)
