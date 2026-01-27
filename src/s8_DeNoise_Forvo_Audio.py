@@ -111,8 +111,8 @@ def main():
         pcm_bytes = ffmpeg_arnndn(pcm_bytes, filename, sr_model_path, secondary_prefix)
 
         # we might, maybe want to consider doing gentle broadband prior to rnnn, maybe
-        pcm_bytes = ffmpeg_afftdn(pcm_bytes, filename)
-        # pcm_bytes = ffmpeg_anlmdn(pcm_bytes, filename)
+        # pcm_bytes = ffmpeg_afftdn(pcm_bytes, filename)
+        pcm_bytes = ffmpeg_anlmdn(pcm_bytes, filename)
         # pcm_bytes = ffmpeg_afwtdn(pcm_bytes, filename)
 
         # proceed w/ impulse & norm
@@ -699,10 +699,10 @@ def ffmpeg_anlmdn(pcm_bytes, filename):
         theta = infinity?
         number of neighbors: choose just enough neighbors so one can see this banded structure ??
     """
-    strength = 0.0008
-    patch_size = 0.03
-    search_window = patch_size*2
-    smooth_factor = 10
+    strength = 0.05     # 0.00001 to 10000; 0.00001
+    patch_size = 0.05   # 0.001 to 0.1; 0.002
+    search_window = patch_size*3    # 0.002 to 0.3; 0.06
+    smooth_factor = 10  # 1 to 1000; 11
 
     command = [
         'ffmpeg',
