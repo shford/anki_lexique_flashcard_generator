@@ -84,7 +84,7 @@ EQUALIZER_PREFIX = 'final_'
 # todo mirror ffmpeg-normalize batch normalization inline for pcm w/out unnecessary I/O overhead
 #   set batch sizes
 
-def main():
+def test_main():
     t1 = time.time()
 
     input_files_dir = '../resources/test_sound_input'
@@ -113,7 +113,7 @@ def main():
         pcm_bytes = ffmpeg_arnndn(pcm_bytes, filename, sr_model_path, secondary_prefix)
 
         # gentle broadband filter to remove inaudible noise before ebu can make it audible
-        # pcm_bytes = ffmpeg_afftdn(pcm_bytes, filename)
+        # pcm_bytes = ffmpeg_afftdn(pcm_bytes, filename) # close 2nd, better denoising, slight lost in crispness
         pcm_bytes = ffmpeg_anlmdn(pcm_bytes, filename)
 
         # proceed w/ impulse & norm
@@ -137,7 +137,7 @@ def main():
     return
 
 
-def real_main():
+def main():
     override_prog_configs_from_file(globals())
     corrupt_files_prior = set()
     corrupt_files_after = set()
@@ -151,6 +151,9 @@ def real_main():
     hypertts_mp3_filenames = [f for f in dir_contents if (os.path.isfile(os.path.join(ANKI_DIR, f)) and SELECTED_AUDIO_PREFIX in f)]
     std_forvo_api_mp3_filenames = [f for f in dir_contents if (os.path.isfile(os.path.join(ANKI_DIR, f)) and ALT_TXT_IN_AUDIO in f and WRITE_FORMAT in f and not 'ATTS ' in f)]
     mp3_filenames = hypertts_mp3_filenames + std_forvo_api_mp3_filenames
+
+    # TODO figure out what do w/ this file that's always corrupt.
+    # mp3_filenames = ['hypertts-c48d4ec6b9a0542809c069de8db963c4edd522fdaef709b7d794151a.mp3']
 
     if TEST:
         handpicked_trouble_files = ['abatteur_fr_canada.mp3',
@@ -283,27 +286,30 @@ def audio_chain(pcm_bytes, filename):
     # this is pretty hit or miss... model alone is better
     # pcm_bytes = ffmpeg_lowpass_highpass(pcm_bytes, filename)
 
-    # 4. remove short, transient bursts (like pen clicks)
+    # 4. gentle broadband filter to remove inaudible noise before ebu can make it audible
+    pcm_bytes = ffmpeg_anlmdn(pcm_bytes, filename)
+
+    # 5. remove short, transient bursts (like pen clicks)
     pcm_bytes = ffmpeg_adeclick(pcm_bytes, filename)
 
-    # 4. x3 rounds of afftdn for general clarity - not bad. lost depth. perhaps if less aggressive.
+    # 6. x3 rounds of afftdn for general clarity - not bad. lost depth. perhaps if less aggressive.
     # pcm_bytes = ffmpeg_afftdn(pcm_bytes, filename)
     # pcm_bytes = ffmpeg_afftdn(pcm_bytes, filename)
     # pcm_bytes = ffmpeg_afftdn(pcm_bytes, filename)
 
-    # 5. stft is good at cleaning front and tail
+    # 7. stft is good at cleaning front and tail
     # pcm_bytes = neural_nine_demo(pcm_bytes, filename)
 
     # skip local volume normalization - it ruins emphasis (e.g. "essential transients")
 
-    # 6. global volume LUFS normalization (adjusts rel to rest of file.. or batch) - note: replaced external ffmpeg-normalize
+    # 8. global volume LUFS normalization (adjusts rel to rest of file.. or batch) - note: replaced external ffmpeg-normalize
     # pcm_bytes = external_tool_ffmpeg_normalize(pcm_bytes, filename)
     pcm_bytes = ffmpeg_ebu_r128_loudnorm(pcm_bytes, filename)
 
-    # 7. volume normalization (applies gain to for absolute adjustment)
+    # 9. volume normalization (applies gain to for absolute adjustment)
     pcm_bytes = ffmpeg_adjust_excess_volume(pcm_bytes, filename)
 
-    # 8. rebrighten a bit - beautifully dialed in.
+    # 10. rebrighten a bit - beautifully dialed in.
     pcm_bytes = equalizer(pcm_bytes, filename)
     return pcm_bytes
 
@@ -731,7 +737,6 @@ def ffmpeg_anlmdn(pcm_bytes, filename):
     return wrap_input_subprocess_run_with_intermediate_files(command, pcm_bytes, filename, ANLMDN_PREFIX)
 
 
-
 def ffmpeg_ebu_r128_loudnorm(pcm_bytes, filename):
     # https://peterforgacs.github.io/2018/05/20/Audio-normalization-with-ffmpeg/
     lra = 40 # same as -lrt in ffmpeg-normalize. values 1 - 50, default 7. lower values changges the shape of the curve to be more aggresive - e.g. quiet = less quiet, loud = less loud, ergo lower Loudnous Range.
@@ -764,8 +769,20 @@ def ffmpeg_ebu_r128_loudnorm(pcm_bytes, filename):
         result = re.search(pattern, output)
         reg = result.group(0)
 
-        # load json
-        return json.loads(reg)
+        # load json results
+        loudnorm_json = json.loads(reg)
+
+        # correct bad measurements from -inf caused by dB log op on 0
+        for k in loudnorm_json.keys():
+            if loudnorm_json[k] =='-inf' or ('-' in loudnorm_json[k] and 'inf' in loudnorm_json[k]):
+                match k:
+                    case 'input_i':
+                        loudnorm_json[k] = '-70.0'
+                    case 'input_thresh':
+                        loudnorm_json[k] = '-70.0'
+                    case 'input_tp':
+                        loudnorm_json[k] = '-9.0'
+        return loudnorm_json
 
     def step2_adjust(measurements):
         # ffmpeg -i input.mp4 -af loudnorm=I=-23:LRA=7:tp=-2:measured_I=-30:measured_LRA=1.1:measured_tp=-11 04:measured_thresh=-40.21:offset=-0.47 -ar 48k -y output.mp4
@@ -826,7 +843,24 @@ def ffmpeg_adjust_excess_volume(pcm_bytes, filename):
         json_str += '}'
 
         # load json
-        return json.loads(json_str)
+        astats_json = json.loads(json_str)
+
+        # correct -inf in astats (seems caused by log 0 for dB unit if audio is silent)
+        for k in astats_json.keys():
+            if astats_json[k] =='-inf' or ('-' in astats_json[k] and 'inf' in astats_json[k]):
+                match k:
+                    case 'Noise floor dB':
+                        astats_json[k] = '-70.0'
+                    case 'Peak level dB':
+                        astats_json[k] = '-70.0'
+                    case 'RMS level dB':
+                        astats_json[k] = '-70.0'
+                    case 'RMS peak dB':
+                        astats_json[k] = '-70.0'
+                    case 'RMS trough dB':
+                        astats_json[k] = '-70.0'
+        return astats_json
+
 
     def adjust_volume(measured_gain):
         # ffmpeg -i input.wav -af volume=-6.734247dB output.wav
