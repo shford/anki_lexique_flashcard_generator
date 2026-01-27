@@ -57,7 +57,7 @@ DESIRED_CHANNELS = '1'
 DESIRED_FORMAT = 's16le'
 DESIRED_CODEC = 'pcm_s16le'
 BYTES_PER_SAMPLE = '2'  # 16-bit = 2 bytes
-LUFS_NORMALIZATION_LEVEL = -16 # was -16, then -12, still too quiet still too quiet. optimal prob in range -16 to -6.
+LUFS_NORMALIZATION_LEVEL = -5 # was -16, then -12, still too quiet still too quiet. optimal prob in range -16 to -6.
 
 # Intermediate File Naming Constants (for debugging/fine tuning ffmpeg arguments)
 USER_PATH = os.path.expanduser('~')
@@ -74,13 +74,15 @@ ANLMDN_PREFIX = 'anlmdn_broadband_least_'
 ADYNAMICEQ_PREFIX = 'adynamiceq_'
 EXTERNAL_FFMPEG_NORMALIZE = 'extern_ffmpeg_norm_'
 SPEECHNORM_PREFIX = 'speechnorm_'
-LUFS_NORMALIZATION_PREFIX = 'norm_lufs_'
+LOUDNORM_EBU_R128_PREFIX = 'ebu_r128_'
+EXCESS_VOLUME_PREFIX_MEASUREMENT = 'measure_volume_'
+EXCESS_VOLUME_PREFIX_ADJUSTMENT = 'adjust_volume_'
 EQUALIZER_PREFIX = 'final_'
 
 # todo mirror ffmpeg-normalize batch normalization inline for pcm w/out unnecessary I/O overhead
 #   set batch sizes
 
-def test_main():
+def main():
     input_files_dir = '../resources/test_sound_input'
     ouput_files_dir = '../default_output/test_sound_output'
     handpicked_trouble_files = ['abatteur_fr_canada.mp3',
@@ -102,8 +104,15 @@ def test_main():
         pcm_bytes = _read_audiofile_to_pcm_bytes(input_filepath) # note len is in bytes
 
         # process
-        pcm_bytes = ffmpeg_two_step_loudnorm(pcm_bytes, filename)
+        sr_model_path = '../resources/rnnoise_models/speech_recording.rnnn'
+        secondary_prefix = '_sr_'
+        pcm_bytes = ffmpeg_arnndn(pcm_bytes, filename, sr_model_path, secondary_prefix)
+        pcm_bytes = ffmpeg_adeclick(pcm_bytes, filename)
+        # pcm_bytes = ffmpeg_lowpass_highpass(pcm_bytes, filename)
+        pcm_bytes = ffmpeg_ebu_r128_loudnorm(pcm_bytes, filename)
+        pcm_bytes = ffmpeg_excess_volume_after_ebu_r128(pcm_bytes, filename)
         # pcm_bytes = external_tool_ffmpeg_normalize(pcm_bytes, filename)
+        pcm_bytes = equalizer(pcm_bytes, filename)
 
         # write audio to mp3 file
         mp3_data = _convert_pcm_to_mp3(pcm_bytes)
@@ -114,7 +123,7 @@ def test_main():
     return
 
 
-def main():
+def real_main():
     override_prog_configs_from_file(globals())
     corrupt_files_prior = set()
     corrupt_files_after = set()
@@ -275,7 +284,7 @@ def audio_chain(pcm_bytes, filename):
 
     # 6. global volume LUFS normalization - replaced external ffmpeg-normalize w/ loudnorm
     # pcm_bytes = external_tool_ffmpeg_normalize(pcm_bytes, filename)
-    pcm_bytes = ffmpeg_two_step_loudnorm(pcm_bytes, filename)
+    pcm_bytes = ffmpeg_ebu_r128_loudnorm(pcm_bytes, filename)
 
     # 8. rebrighten a bit - beautifully dialed in.
     pcm_bytes = equalizer(pcm_bytes, filename)
@@ -689,10 +698,9 @@ def ffmpeg_anlmdn(pcm_bytes, filename):
     return wrap_input_subprocess_run_with_intermediate_files(command, pcm_bytes, filename, ANLMDN_PREFIX)
 
 
-def ffmpeg_two_step_loudnorm(pcm_bytes, filename):
+def ffmpeg_ebu_r128_loudnorm(pcm_bytes, filename):
     # https://peterforgacs.github.io/2018/05/20/Audio-normalization-with-ffmpeg/
-
-    lra = 7 # same as -lrt in ffmpeg-normalize. values 5 - 15, default 7. lower values changges the shape of the curve to be more aggresive - e.g. quiet = less quiet, loud = less loud, ergo lower Loudnous Range.
+    lra = 40 # same as -lrt in ffmpeg-normalize. values 1 - 50, default 7. lower values changges the shape of the curve to be more aggresive - e.g. quiet = less quiet, loud = less loud, ergo lower Loudnous Range.
     true_peak = -1 # true peak limiter, usually -0.5 to -1.5 dBTP
     def step1_measure():
         # ffmpeg -i input.mp4 -af loudnorm=I=-23:LRA=7:tp=-2:print_format=json -f null -
@@ -743,9 +751,55 @@ def ffmpeg_two_step_loudnorm(pcm_bytes, filename):
             'pipe:1'
         ]
 
-        return wrap_input_subprocess_run_with_intermediate_files(command, pcm_bytes, filename, EQUALIZER_PREFIX)
+        return wrap_input_subprocess_run_with_intermediate_files(command, pcm_bytes, filename, LOUDNORM_EBU_R128_PREFIX)
 
-    return step2_adjust(step1_measure())
+    measure = step1_measure()
+    return step2_adjust(measure)
+
+
+def ffmpeg_excess_volume_after_ebu_r128(pcm_bytes, filename):
+    # i don't know that there's really a proper name for this but
+    # if "Peak level dB:" is > 0 then it's too dang loud... looking at you adbuction.mp3
+    # this adjusts gain (volume) to safe levels
+
+    def measure_volume():
+        # ffmpeg -i $INPUT_FILE -af astats=metadata=1 -f null -
+        command = [
+            'ffmpeg',
+            '-f', DESIRED_FORMAT,
+            '-ar', DESIRED_RATE,
+            '-ac', DESIRED_CHANNELS,
+            '-i', 'pipe:0',
+            '-filter:a', f'astats=metadata=1',
+            '-f', 'null',
+            'pipe:1'
+        ]
+
+        # run command
+        return wrap_input_subprocess_run_with_intermediate_files(command, pcm_bytes, filename, EXCESS_VOLUME_PREFIX_MEASUREMENT)
+
+
+    def adjust_volume(measured_gain):
+        # ffmpeg -i input.wav -af volume=-6.734247dB output.wav
+        conservative_peak_gain = -10
+        new_max_gain = conservative_peak_gain - measured_gain
+        command = [
+            'ffmpeg',
+            '-f', DESIRED_FORMAT,
+            '-ar', DESIRED_RATE,
+            '-ac', DESIRED_CHANNELS,
+            '-i', 'pipe:0',
+            '-filter:a',
+            f'volume={measured_gain}dB', # must have unit
+            '-ar', DESIRED_RATE,
+            '-f', DESIRED_FORMAT,
+            'pipe:1'
+        ]
+
+        return wrap_input_subprocess_run_with_intermediate_files(command, pcm_bytes, filename, EXCESS_VOLUME_PREFIX_ADJUSTMENT)
+
+    measured_gain = measure_volume()
+    return adjust_volume(measured_gain)
 
 
 def ffmpeg_adynamicequalizer(pcm_bytes, filename):
