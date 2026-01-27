@@ -111,9 +111,8 @@ def main():
         pcm_bytes = ffmpeg_arnndn(pcm_bytes, filename, sr_model_path, secondary_prefix)
 
         # we might, maybe want to consider doing gentle broadband prior to rnnn, maybe
-        # pcm_bytes = ffmpeg_afftdn(pcm_bytes, filename)
-        pcm_bytes = ffmpeg_anlmdn(pcm_bytes, filename)
-        # pcm_bytes = ffmpeg_afwtdn(pcm_bytes, filename)
+        pcm_bytes = ffmpeg_afftdn(pcm_bytes, filename)
+        # pcm_bytes = ffmpeg_anlmdn(pcm_bytes, filename)
 
         # proceed w/ impulse & norm
         pcm_bytes = ffmpeg_adeclick(pcm_bytes, filename)
@@ -605,6 +604,8 @@ def ffmpeg_afwtdn(pcm_bytes, filename):
           I'm pretty sure I narrowed the issues down to the wavets: sym2 & sym4.
           Installed version at the time of writing was ffmpeg version 6.1.1-3ubuntu5 on Ubuntu 24.04.3.
 
+    Yeah, no, this thing is wack. Definetly some underlying ffmpeg errors & the alg itself is wack.
+
     reference command:
     ffmpeg -y -i <path_in>
      -af 'afwtdn=sigma=0:levels=10:wavet=sym2:percent=85:profile=0:adaptive=0:samples=8192:softness=1'
@@ -636,6 +637,14 @@ def ffmpeg_afwtdn(pcm_bytes, filename):
         'pipe:1'                    # unchaning stdout
     ]
 
+    sigma = 0     # 0 to 1; default 1; controls strength of denoising
+    wavelets = 10   # 1 to 12. Default value is 10; number of wavelet levels of decomposition - setting this too low make denoising performance very poor.
+    wavet = 'sym4' # more coefficients means worse filtering speed, but overall better quality. # sym2 sym4 rbior68 deb10 sym10 coif5 bl3
+    percent = 100   # 0 to 100; default 85; percent of denoising.
+    profile = 1     # If enabled, first input frame will be used as noise profile. If first frame samples contain non-noise performance will be very poor.
+    adaptive = 0    # enabled/disabled
+    samples = 8192  # 512 to 65536; default 8192; size of single frame in number of samples
+    softness = 1    # 0 to 10; default 1; softness applied inside thresholding function
     chatgpt_suggested_balanced = [
         'ffmpeg',
         '-f', DESIRED_FORMAT,       # unchanging input format
@@ -643,8 +652,7 @@ def ffmpeg_afwtdn(pcm_bytes, filename):
         '-ac', DESIRED_CHANNELS,    # unchanging input channels
         '-i', 'pipe:0',             # unchanging stdin
         # '-filter:a', 'afwtdn=sigma=0.01:levels=8:wavet=coif5:percent=95:adaptive=1:samples=16384:softness=3',
-        '-filter:a', 'afwtdn=sigma=0.01:levels=8:wavet=coif5:percent=95:profile=1:adaptive=0:samples=16384:softness=3',
-
+        '-filter:a', f'afwtdn=sigma={sigma}:levels={wavelets}:wavet={wavet}:percent={percent}:profile={profile}:adaptive={adaptive}:samples={samples}:softness={softness}',
         '-f', DESIRED_FORMAT,       # unchanging output format
         'pipe:1'                    # unchaning stdout
     ]
