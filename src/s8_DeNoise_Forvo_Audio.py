@@ -85,19 +85,21 @@ EQUALIZER_PREFIX = 'final_'
 #   set batch sizes
 
 def main():
+    t1 = time.time()
+
     input_files_dir = '../resources/test_sound_input'
     ouput_files_dir = '../default_output/test_sound_output'
     handpicked_trouble_files = ['abatteur_fr_canada.mp3',
-                                # 'abduction_fr_canada.mp3',
-                                # 'anachronique_fr_canada.mp3', # quiet
+                                'abduction_fr_canada.mp3',
+                                'anachronique_fr_canada.mp3', # quiet
                                 'amollir_fr_netherlands.mp3', # quiet
-                                # 'hypertts-abfa294bc860ee1de8562f87fde34ba3bc64b04951d63e978b466f59.mp3',  # corps
-                                # 'hypertts-b68f18b7fbb001873cbfa7c5126deaed887b582899e1db4b5d38dd96.mp3',  # oeil
-                                # 'hypertts-10c727621af59dc093fd4ff5131409910f1b98deec972ba4644ca509.mp3',  # problème
-                                # 'hypertts-d2f1e3f45ee9bf07b026f6aac11416911c0552ffe2d94de867550379.mp3',  # comprendre
+                                'hypertts-abfa294bc860ee1de8562f87fde34ba3bc64b04951d63e978b466f59.mp3',  # corps
+                                'hypertts-b68f18b7fbb001873cbfa7c5126deaed887b582899e1db4b5d38dd96.mp3',  # oeil
+                                'hypertts-10c727621af59dc093fd4ff5131409910f1b98deec972ba4644ca509.mp3',  # problème
+                                'hypertts-d2f1e3f45ee9bf07b026f6aac11416911c0552ffe2d94de867550379.mp3',  # comprendre
                                 'hypertts-f7a0c40d2fe7800b2a6c9682ac808788b22de2e05f10291dbd271308.mp3',  # regard
-                                # 'hypertts-d1433cbef7f67adbb2dc5fbb193f5db6665154af110fc63d8f4783dc.mp3',  # aussi
-                                # 'hypertts-7bb303c3f3bd58f6c0514510e8dd4801bfb33777f384c176aa62b5f2.mp3',  # quiet
+                                'hypertts-d1433cbef7f67adbb2dc5fbb193f5db6665154af110fc63d8f4783dc.mp3',  # aussi
+                                'hypertts-7bb303c3f3bd58f6c0514510e8dd4801bfb33777f384c176aa62b5f2.mp3',  # quiet
                                 ]
     for filename in handpicked_trouble_files:
         # test folder
@@ -110,16 +112,16 @@ def main():
         secondary_prefix = '_sr_'
         pcm_bytes = ffmpeg_arnndn(pcm_bytes, filename, sr_model_path, secondary_prefix)
 
-        # we might, maybe want to consider doing gentle broadband prior to rnnn, maybe
-        pcm_bytes = ffmpeg_afftdn(pcm_bytes, filename)
-        # pcm_bytes = ffmpeg_anlmdn(pcm_bytes, filename)
+        # gentle broadband filter to remove inaudible noise before ebu can make it audible
+        # pcm_bytes = ffmpeg_afftdn(pcm_bytes, filename)
+        pcm_bytes = ffmpeg_anlmdn(pcm_bytes, filename)
 
         # proceed w/ impulse & norm
         pcm_bytes = ffmpeg_adeclick(pcm_bytes, filename)
         pcm_bytes = ffmpeg_ebu_r128_loudnorm(pcm_bytes, filename)
         pcm_bytes = ffmpeg_adjust_excess_volume(pcm_bytes, filename)
 
-        # sometimes low level noise was amplified by luf norm if speaker was quiet and there was lots of quiet noise so we want to try to get rid of that
+        # sometimes low level noise was amplified by luf norm if speaker was quiet and there was lots of quiet noise
         pcm_bytes = ffmpeg_lowpass_highpass(pcm_bytes, filename)
 
         # pcm_bytes = external_tool_ffmpeg_normalize(pcm_bytes, filename)
@@ -130,6 +132,8 @@ def main():
         with open(ouput_filepath, 'wb') as f:
             f.write(mp3_data)
         print(f'Wrote: {filename}.')
+
+    print(time.time() - t1)
     return
 
 
@@ -529,9 +533,10 @@ def ffmpeg_afftdn(pcm_bytes, filename):
     reference command:
     ffmpeg -i <path_in> -af "afftdn=nf=-25" <path_out>
     """
-    nf = -25    # -80 to -20 dB; default -50 dB
+    nr = 12     #  0.01 to 97; default 12; noise reduction in dB
+    nf = -25    # -80 to -20 dB; default -50; noise floor in dB
     nt = 'v'    # default 'w'; our noise actually sounds kind of like vinyl weirdly enough
-    bm = 0.2   # band multiplier; 0.2 to 5; default 1.25. Used how much to spread bands across frequency bins.
+    bm = 0.2    # band multiplier; 0.2 to 5; default 1.25. Used how much to spread bands across frequency bins.
     gs = 0      # 0 to 50; default 0. Useful to reduce random music noise artefacts.
     command = [
         'ffmpeg',
@@ -539,7 +544,7 @@ def ffmpeg_afftdn(pcm_bytes, filename):
         '-ar', DESIRED_RATE,        # unchanging input rate
         '-ac', DESIRED_CHANNELS,    # unchanging input channels
         '-i', 'pipe:0',             # unchanging stdin
-        '-filter:a', f'afftdn=nf={nf}:nt={nt}:bm={bm}:gs={gs}',
+        '-filter:a', f'afftdn=nr={nr}:nf={nf}:nt={nt}:bm={bm}:gs={gs}',
         '-f', DESIRED_FORMAT,       # unchanging output format
         'pipe:1'                    # unchaning stdout
     ]
@@ -559,7 +564,7 @@ def ffmpeg_lowpass_highpass(pcm_bytes, filename):
         '-ar', DESIRED_RATE,        # unchanging input rate
         '-ac', DESIRED_CHANNELS,    # unchanging input channels
         '-i', 'pipe:0',             # unchanging stdin
-        '-filter:a', f'lowpass=f=4400', # removed filter highpass=f=100,
+        '-filter:a', f'highpass=f=50, lowpass=f=4400', # removed
         '-f', DESIRED_FORMAT,       # unchanging output format
         'pipe:1'                    # unchaning stdout
     ]
@@ -707,9 +712,9 @@ def ffmpeg_anlmdn(pcm_bytes, filename):
         theta = infinity?
         number of neighbors: choose just enough neighbors so one can see this banded structure ??
     """
-    strength = 0.05     # 0.00001 to 10000; 0.00001
-    patch_size = 0.05   # 0.001 to 0.1; 0.002
-    search_window = patch_size*3    # 0.002 to 0.3; 0.06
+    strength = 0.05  # 0.00001 to 10000; 0.00001
+    patch_size = 0.05  # 0.001 to 0.1; 0.002
+    search_window = patch_size * 3  # 0.002 to 0.3; 0.06
     smooth_factor = 10  # 1 to 1000; 11
 
     command = [
@@ -719,10 +724,12 @@ def ffmpeg_anlmdn(pcm_bytes, filename):
         '-ac', DESIRED_CHANNELS,    # unchanging input channels
         '-i', 'pipe:0',             # unchanging stdin
         '-filter:a', f'anlmdn=s={strength}:p={patch_size}:r={search_window}:m={smooth_factor}',
+        # '-filter:a', f'aloop=loop={loop}:size={frames},anlmdn=s={strength}:p={patch_size}:r={search_window}:m={smooth_factor},atrim=start={t*loop}',
         '-f', DESIRED_FORMAT,       # unchanging output format
         'pipe:1'                    # unchaning stdout
     ]
     return wrap_input_subprocess_run_with_intermediate_files(command, pcm_bytes, filename, ANLMDN_PREFIX)
+
 
 
 def ffmpeg_ebu_r128_loudnorm(pcm_bytes, filename):
