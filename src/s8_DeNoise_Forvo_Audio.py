@@ -59,7 +59,7 @@ DESIRED_CHANNELS = '1'
 DESIRED_FORMAT = 'f32le'
 DESIRED_CODEC = 'pcm_f32le'
 BYTES_PER_SAMPLE = '2'  # 16-bit = 2 bytes
-LUFS_NORMALIZATION_LEVEL = -8 # was -16, then -12, still too quiet still too quiet. optimal prob in range -16 to -6.
+LUFS_NORMALIZATION_LEVEL = -5 # was -16, then -12, still too quiet still too quiet. optimal prob in range -16 to -6.
 
 # Intermediate File Naming Constants (for debugging/fine tuning ffmpeg arguments)
 USER_PATH = os.path.expanduser('~')
@@ -88,16 +88,16 @@ def main():
     input_files_dir = '../resources/test_sound_input'
     ouput_files_dir = '../default_output/test_sound_output'
     handpicked_trouble_files = ['abatteur_fr_canada.mp3',
-                                'abduction_fr_canada.mp3',
-                                'anachronique_fr_canada.mp3', # quiet
+                                # 'abduction_fr_canada.mp3',
+                                # 'anachronique_fr_canada.mp3', # quiet
                                 'amollir_fr_netherlands.mp3', # quiet
-                                'hypertts-abfa294bc860ee1de8562f87fde34ba3bc64b04951d63e978b466f59.mp3',  # corps
-                                'hypertts-b68f18b7fbb001873cbfa7c5126deaed887b582899e1db4b5d38dd96.mp3',  # oeil
-                                'hypertts-10c727621af59dc093fd4ff5131409910f1b98deec972ba4644ca509.mp3',  # problème
-                                'hypertts-d2f1e3f45ee9bf07b026f6aac11416911c0552ffe2d94de867550379.mp3',  # comprendre
+                                # 'hypertts-abfa294bc860ee1de8562f87fde34ba3bc64b04951d63e978b466f59.mp3',  # corps
+                                # 'hypertts-b68f18b7fbb001873cbfa7c5126deaed887b582899e1db4b5d38dd96.mp3',  # oeil
+                                # 'hypertts-10c727621af59dc093fd4ff5131409910f1b98deec972ba4644ca509.mp3',  # problème
+                                # 'hypertts-d2f1e3f45ee9bf07b026f6aac11416911c0552ffe2d94de867550379.mp3',  # comprendre
                                 'hypertts-f7a0c40d2fe7800b2a6c9682ac808788b22de2e05f10291dbd271308.mp3',  # regard
-                                'hypertts-d1433cbef7f67adbb2dc5fbb193f5db6665154af110fc63d8f4783dc.mp3',  # aussi
-                                'hypertts-7bb303c3f3bd58f6c0514510e8dd4801bfb33777f384c176aa62b5f2.mp3',  # quiet
+                                # 'hypertts-d1433cbef7f67adbb2dc5fbb193f5db6665154af110fc63d8f4783dc.mp3',  # aussi
+                                # 'hypertts-7bb303c3f3bd58f6c0514510e8dd4801bfb33777f384c176aa62b5f2.mp3',  # quiet
                                 ]
     for filename in handpicked_trouble_files:
         # test folder
@@ -109,6 +109,13 @@ def main():
         sr_model_path = '../resources/rnnoise_models/speech_recording.rnnn'
         secondary_prefix = '_sr_'
         pcm_bytes = ffmpeg_arnndn(pcm_bytes, filename, sr_model_path, secondary_prefix)
+
+        # we might, maybe want to consider doing gentle broadband prior to rnnn, maybe
+        pcm_bytes = ffmpeg_afftdn(pcm_bytes, filename)
+        # pcm_bytes = ffmpeg_anlmdn(pcm_bytes, filename)
+        # pcm_bytes = ffmpeg_afwtdn(pcm_bytes, filename)
+
+        # proceed w/ impulse & norm
         pcm_bytes = ffmpeg_adeclick(pcm_bytes, filename)
         pcm_bytes = ffmpeg_ebu_r128_loudnorm(pcm_bytes, filename)
         pcm_bytes = ffmpeg_adjust_excess_volume(pcm_bytes, filename)
@@ -394,7 +401,7 @@ def denoise_examples():
     pcm_bytes = ffmpeg_afftdn(pcm_bytes, filename)
 
     # adeclick - impulsive filtering
-    ffmpeg_adeclick(filepath, filename)
+    ffmpeg_adeclick(pcm_bytes, filename)
 
     # afwtdn - broadband filtering - I found this one to be uniquely bad. Maybe I just didn't tweak it enough.
     ffmpeg_afwtdn(pcm_bytes, filepath)
@@ -518,18 +525,22 @@ def _convert_pcm_to_mp3(pcm_data):
 
 def ffmpeg_afftdn(pcm_bytes, filename):
     """
-    Sample frequencies referenced from Matteo M. on S.O.
+    Analyzes the noise profile of an audio file and applying noise reduction techniques to minimize unwanted sounds.
 
     reference command:
     ffmpeg -i <path_in> -af "afftdn=nf=-25" <path_out>
     """
+    nf = -25    # -80 to -20 dB; default -50 dB
+    nt = 'v'    # default 'w'; our noise actually sounds kind of like vinyl weirdly enough
+    bm = 0.2   # band multiplier; 0.2 to 5; default 1.25. Used how much to spread bands across frequency bins.
+    gs = 0      # 0 to 50; default 0. Useful to reduce random music noise artefacts.
     command = [
         'ffmpeg',
         '-f', DESIRED_FORMAT,       # unchanging input format
         '-ar', DESIRED_RATE,        # unchanging input rate
         '-ac', DESIRED_CHANNELS,    # unchanging input channels
         '-i', 'pipe:0',             # unchanging stdin
-        '-filter:a', 'afftdn=nf=-25',
+        '-filter:a', f'afftdn=nf={nf}:nt={nt}:bm={bm}:gs={gs}',
         '-f', DESIRED_FORMAT,       # unchanging output format
         'pipe:1'                    # unchaning stdout
     ]
