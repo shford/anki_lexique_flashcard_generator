@@ -56,8 +56,8 @@ WRITE_FORMAT = 'mp3'
 WRITE_CODEC = 'libmp3lame'
 DESIRED_RATE = '44100'
 DESIRED_CHANNELS = '1'
-DESIRED_FORMAT = 's16le'
-DESIRED_CODEC = 'pcm_s16le'
+DESIRED_FORMAT = 'f32le'
+DESIRED_CODEC = 'pcm_f32le'
 BYTES_PER_SAMPLE = '2'  # 16-bit = 2 bytes
 LUFS_NORMALIZATION_LEVEL = -5 # was -16, then -12, still too quiet still too quiet. optimal prob in range -16 to -6.
 
@@ -721,16 +721,15 @@ def ffmpeg_ebu_r128_loudnorm(pcm_bytes, filename):
         p = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         p.stdin.write(pcm_bytes)
         p.stdin.close()  # THIS is the "EOF"
-        j = p.stderr.read()
+        raw_output = p.stderr.read()
 
         # remove formatting
-        json_s = j.decode('utf-8')
-        rem_formatting = json_s.replace('\n','')
-        rem_formatting = rem_formatting.replace('\t','')
+        unformmated_output = raw_output.decode('utf-8')
+        output = unformmated_output.replace('\n','').replace('\t','')
 
         # find json
         pattern = '{.*}'
-        result = re.search(pattern, rem_formatting)
+        result = re.search(pattern, output)
         reg = result.group(0)
 
         # load json
@@ -799,8 +798,8 @@ def ffmpeg_adjust_excess_volume(pcm_bytes, filename):
 
     def adjust_volume(measured_gain):
         # ffmpeg -i input.wav -af volume=-6.734247dB output.wav
-        conservative_peak_gain = -6
-        new_max_gain = conservative_peak_gain - measured_gain
+        conservative_peak_gain = -6.0
+        new_max_gain = conservative_peak_gain - float(measured_gain)
         command = [
             'ffmpeg',
             '-f', DESIRED_FORMAT,
@@ -808,7 +807,7 @@ def ffmpeg_adjust_excess_volume(pcm_bytes, filename):
             '-ac', DESIRED_CHANNELS,
             '-i', 'pipe:0',
             '-filter:a',
-            f'volume={measured_gain}dB', # must have unit
+            f'volume={new_max_gain}dB', # must have unit
             '-ar', DESIRED_RATE,
             '-f', DESIRED_FORMAT,
             'pipe:1'
