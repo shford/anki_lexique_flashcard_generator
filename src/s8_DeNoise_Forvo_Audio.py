@@ -21,9 +21,11 @@ A note about ffmpeg-normalize:
     https://pypi.org/project/ffmpeg-normalize/1.16.0/
 """
 import io
+import json
 import shutil
 import subprocess
 import time
+import re
 from multiprocessing import Pool, cpu_count
 from pathlib import Path
 
@@ -110,7 +112,7 @@ def main():
         pcm_bytes = ffmpeg_adeclick(pcm_bytes, filename)
         # pcm_bytes = ffmpeg_lowpass_highpass(pcm_bytes, filename)
         pcm_bytes = ffmpeg_ebu_r128_loudnorm(pcm_bytes, filename)
-        pcm_bytes = ffmpeg_excess_volume_after_ebu_r128(pcm_bytes, filename)
+        pcm_bytes = ffmpeg_adjust_excess_volume(pcm_bytes, filename)
         # pcm_bytes = external_tool_ffmpeg_normalize(pcm_bytes, filename)
         pcm_bytes = equalizer(pcm_bytes, filename)
 
@@ -727,13 +729,11 @@ def ffmpeg_ebu_r128_loudnorm(pcm_bytes, filename):
         rem_formatting = rem_formatting.replace('\t','')
 
         # find json
-        import re
         pattern = '{.*}'
         result = re.search(pattern, rem_formatting)
         reg = result.group(0)
 
         # load json
-        import json
         return json.loads(reg)
 
     def step2_adjust(measurements):
@@ -757,12 +757,12 @@ def ffmpeg_ebu_r128_loudnorm(pcm_bytes, filename):
     return step2_adjust(measure)
 
 
-def ffmpeg_excess_volume_after_ebu_r128(pcm_bytes, filename):
+def ffmpeg_adjust_excess_volume(pcm_bytes, filename):
     # i don't know that there's really a proper name for this but
     # if "Peak level dB:" is > 0 then it's too dang loud... looking at you adbuction.mp3
     # this adjusts gain (volume) to safe levels
 
-    def measure_volume():
+    def parse_ffmpeg_astats_to_json():
         # ffmpeg -i $INPUT_FILE -af astats=metadata=1 -f null -
         command = [
             'ffmpeg',
@@ -776,12 +776,30 @@ def ffmpeg_excess_volume_after_ebu_r128(pcm_bytes, filename):
         ]
 
         # run command
-        return wrap_input_subprocess_run_with_intermediate_files(command, pcm_bytes, filename, EXCESS_VOLUME_PREFIX_MEASUREMENT)
+        p = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        p.stdin.write(pcm_bytes)
+        p.stdin.close()  # THIS is the "EOF"
+        raw_output = p.stderr.read()
 
+        # remove formatting
+        output = raw_output.decode('utf-8')
+
+        # build json - python doesn't allow non-fixed width operators inside regex... so we're back to str parsing
+        json_str = '{'
+        for line in output.splitlines():
+            if 'Parsed_astats_' in line and ':' in line:
+                unformatted_key_value_pair = line.split(']')[1]
+                key_value_l = unformatted_key_value_pair.split(':')
+                json_str += f'"{key_value_l[0].strip()}":"{key_value_l[1].strip()}",'
+        json_str = json_str[:-1] # easiest way to rem trailing comma, breaks if you try to make it pretty with newlines :-)
+        json_str += '}'
+
+        # load json
+        return json.loads(json_str)
 
     def adjust_volume(measured_gain):
         # ffmpeg -i input.wav -af volume=-6.734247dB output.wav
-        conservative_peak_gain = -10
+        conservative_peak_gain = -6
         new_max_gain = conservative_peak_gain - measured_gain
         command = [
             'ffmpeg',
@@ -798,7 +816,8 @@ def ffmpeg_excess_volume_after_ebu_r128(pcm_bytes, filename):
 
         return wrap_input_subprocess_run_with_intermediate_files(command, pcm_bytes, filename, EXCESS_VOLUME_PREFIX_ADJUSTMENT)
 
-    measured_gain = measure_volume()
+    astats = parse_ffmpeg_astats_to_json()
+    measured_gain = astats['Peak level dB']
     return adjust_volume(measured_gain)
 
 
