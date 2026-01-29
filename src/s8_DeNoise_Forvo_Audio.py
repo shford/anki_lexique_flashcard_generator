@@ -777,11 +777,15 @@ def ffmpeg_ebu_r128_loudnorm(pcm_bytes, filename):
             if loudnorm_json[k] =='-inf' or ('-' in loudnorm_json[k] and 'inf' in loudnorm_json[k]):
                 match k:
                     case 'input_i':
-                        loudnorm_json[k] = '-70.0'
+                        loudnorm_json[k] = '-99.0' # will be Measured I; min
                     case 'input_thresh':
-                        loudnorm_json[k] = '-70.0'
+                        loudnorm_json[k] = '-99.0' # will be Measured Threshold; min
                     case 'input_tp':
                         loudnorm_json[k] = '-9.0'
+                    case 'input_lra':
+                        loudnorm_json[k] = '1.0'
+                    case 'target_offset':
+                        loudnorm_json[k] = '-99.0'
         return loudnorm_json
 
     def step2_adjust(measurements):
