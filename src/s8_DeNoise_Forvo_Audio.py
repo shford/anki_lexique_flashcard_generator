@@ -757,7 +757,7 @@ def ffmpeg_ebu_r128_loudnorm(pcm_bytes, filename):
         # run command
         p = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         p.stdin.write(pcm_bytes)
-        p.stdin.close()  # THIS is the "EOF"
+        p.stdin.close()  # THIS is the "EOF" - ffmpeg only sometimes works with normal subprocess, of course
         raw_output = p.stderr.read()
 
         # remove formatting
@@ -772,33 +772,29 @@ def ffmpeg_ebu_r128_loudnorm(pcm_bytes, filename):
         # load json results
         loudnorm_json = json.loads(reg)
 
-        # correct bad measurements from -inf caused by dB log op on 0
-        for k in loudnorm_json.keys():
-            if 'inf' in loudnorm_json[k]:
-                if loudnorm_json[k] =='-inf' or ('-' in loudnorm_json[k] and 'inf' in loudnorm_json[k]):
-                    match k:
-                        case 'input_i':
-                            loudnorm_json[k] = '-99.0' # will be Measured I; min
-                        case 'input_thresh':
-                            loudnorm_json[k] = '-99.0' # will be Measured Threshold; min
-                        case 'input_tp':
-                            loudnorm_json[k] = '-9.0'
-                        case 'input_lra':
-                            loudnorm_json[k] = '1.0'
-                        case 'target_offset':
-                            loudnorm_json[k] = '-99.0'
-                else: # positive inf
-                    match k:
-                        case 'input_i':
-                            loudnorm_json[k] = '-5.0' # will be Measured I; max
-                        case 'input_thresh':
-                            loudnorm_json[k] = '0.0' # will be Measured Threshold; min
-                        case 'input_tp':
-                            loudnorm_json[k] = '99.0'
-                        case 'input_lra':
-                            loudnorm_json[k] = '50.0'
-                        case 'target_offset':
-                            loudnorm_json[k] = '99.0'
+        # correct step1 measurements before passing into step2
+        # ... uses pass by reference. deal with it.
+        def correct_ffmpegs_many_erroneous_measurements():
+            def set_min_max(min, max):
+                if loudnorm_json[k] == '-inf' or float(loudnorm_json[k]) < float(min):
+                    loudnorm_json[k] = min
+                if loudnorm_json[k] == 'inf' or float(loudnorm_json[k]) > float(max):
+                    loudnorm_json[k] = max
+
+            for k in loudnorm_json.keys():
+                match k:
+                    case 'input_i':
+                        set_min_max('-99.0', '0.0')  # min/max for 'measured_i'
+                    case 'input_lra':
+                        set_min_max('0.0', '99.0')   # min/max for 'measured_lra'
+                    case 'input_tp':
+                        set_min_max('-99.0', '99.0') # min/max for 'measured_tp'
+                    case 'input_thresh':
+                        set_min_max('-99.0', '0.0')  # min/max for 'measured_thresh'
+                    # case 'target_offset':
+                    #     set_min_max('-99.0', '99.0')
+        correct_ffmpegs_many_erroneous_measurements()
+
         return loudnorm_json
 
     def step2_adjust(measurements):
@@ -810,7 +806,8 @@ def ffmpeg_ebu_r128_loudnorm(pcm_bytes, filename):
             '-ac', DESIRED_CHANNELS,
             '-i', 'pipe:0',
             '-filter:a',
-            f'loudnorm=I={LUFS_NORMALIZATION_LEVEL}:LRA={lra}:tp={true_peak}:measured_I={measurements['input_i']}:measured_LRA={measurements['input_lra']}:measured_tp={measurements['input_tp']}:measured_thresh={measurements['input_thresh']}:offset={measurements['target_offset']}',
+            f'loudnorm=I={LUFS_NORMALIZATION_LEVEL}:LRA={lra}:tp={true_peak}:measured_I={measurements['input_i']}:measured_LRA={measurements['input_lra']}:measured_tp={measurements['input_tp']}:measured_thresh={measurements['input_thresh']}',
+            # f'loudnorm=I={LUFS_NORMALIZATION_LEVEL}:LRA={lra}:tp={true_peak}:measured_I={measurements['input_i']}:measured_LRA={measurements['input_lra']}:measured_tp={measurements['input_tp']}:measured_thresh={measurements['input_thresh']}:offset={measurements['target_offset']}',
             '-ar', DESIRED_RATE,
             '-f', DESIRED_FORMAT,
             'pipe:1'
