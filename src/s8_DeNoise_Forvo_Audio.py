@@ -26,6 +26,7 @@ import shutil
 import subprocess
 import time
 import re
+from dataclasses import dataclass
 from multiprocessing import Pool, cpu_count
 from pathlib import Path
 
@@ -81,8 +82,13 @@ EXCESS_VOLUME_PREFIX_MEASUREMENT = 'measure_volume_'
 EXCESS_VOLUME_PREFIX_ADJUSTMENT = 'adjust_volume_'
 EQUALIZER_PREFIX = 'final_'
 
-# todo mirror ffmpeg-normalize batch normalization inline for pcm w/out unnecessary I/O overhead
-#   set batch sizes
+# TODO tmp fix; remove once corrected. just save the queue of errors and print them at the end so that we're not spending 100+ hours each run for no reason
+@dataclass
+class Tmp_Error_Logging_Helper_Dataclass:
+    filename: str
+    error_msg: str
+SUBPROCESS_ERRORS = []
+
 
 def test_main():
     t1 = time.time()
@@ -192,6 +198,10 @@ def main():
     t2 = time.time()
     print(f'\nWrote {len(mp3_filenames)} new files in {t2-t1} seconds.\n.')
 
+    for subprocess_error in SUBPROCESS_ERRORS:
+        print(subprocess_error)
+
+
 
 def backup_audio_collection():
     print('Backing up collection.')
@@ -264,6 +274,8 @@ def process_audio_file(filename):
 
     # clean up audio using ffmpeg wrappers
     pcm_bytes = audio_chain(pcm_bytes, filename)
+    if pcm_bytes is None: # just skip errors
+        return
 
     # write audio to mp3 file
     mp3_data = _convert_pcm_to_mp3(pcm_bytes)
@@ -305,6 +317,8 @@ def audio_chain(pcm_bytes, filename):
     # 8. global volume LUFS normalization (adjusts rel to rest of file.. or batch) - note: replaced external ffmpeg-normalize
     # pcm_bytes = external_tool_ffmpeg_normalize(pcm_bytes, filename)
     pcm_bytes = ffmpeg_ebu_r128_loudnorm(pcm_bytes, filename)
+    if pcm_bytes is None:
+        return None
 
     # 9. volume normalization (applies gain to for absolute adjustment)
     pcm_bytes = ffmpeg_adjust_excess_volume(pcm_bytes, filename)
@@ -331,9 +345,9 @@ def wrap_input_subprocess_run_with_intermediate_files(command, pcm_bytes, filena
 
         return pcm_bytes
     except subprocess.CalledProcessError as e:
-        print('Stderr:\n')
-        print(e.stderr.decode('utf-8'))
-        raise
+        err_msg = e.stderr.decode('utf-8')
+        SUBPROCESS_ERRORS.append(Tmp_Error_Logging_Helper_Dataclass(filename, err_msg))
+        return None
 
 
 def wrap_subprocess_run(command, optional_input=None):
